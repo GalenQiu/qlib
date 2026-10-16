@@ -12,8 +12,12 @@
 ## 语言
 
 英文文档位于 [`../`](../index.md)，本目录是它的简体中文版本：两套文档逐文件对应，
-并且都会进入生成的 Doxygen 参考。`mainpage.md` 是唯一的例外——它只能有一份，因此
-没有中文对应文件。
+并且都会进入生成的 Doxygen 参考。例外只有两个，都是刻意的：
+
+- `mainpage.md` 只能有一份，因此没有中文对应文件；
+- [开发工作流](development-workflow.md) 是给当前维护者的操作手册，只有中文版。
+
+`ci/check_i18n.py` 里有一份显式的例外清单记录这两条，而不是让它们悄悄通过检查。
 
 修改某一页时，请在同一次改动中一并更新对应的另一语言版本，或者明确说明该译文已过期。
 
@@ -40,6 +44,10 @@ python3 ci/check_links.py
 4. [可移植性](technical/portability.md) —— 支持的平台与相关的条件编译
 5. [构建系统](technical/build-system.md) —— CMake 结构与如何新增模块
 6. [测试](technical/testing.md) —— 测试、模糊测试与静态分析的策略
+
+另外还有一份**仅中文**的操作手册：
+
+7. [开发工作流](development-workflow.md) —— 日常开发、验证、发布与已知的坑
 
 ## 构建 API 参考
 

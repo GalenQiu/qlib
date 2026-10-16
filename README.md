@@ -1,4 +1,7 @@
 # qlib
+
+[![CI](https://github.com/qiugangsic/qlib/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/qiugangsic/qlib/actions/workflows/ci.yml)
+
 A general purpose industrial C11 library: data structures, algorithms, network utilities and common tools.
 Cross platform: Linux / macOS / Windows, MIT license.
 

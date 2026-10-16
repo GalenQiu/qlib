@@ -22,9 +22,18 @@ import os
 import re
 import sys
 
-# Pages that legitimately exist on one side only. Doxygen accepts a single
-# landing page, so mainpage.md is English-only by design.
+# Pages that legitimately exist on one side only. Both entries are deliberate
+# and neither is a way to sneak a shared page past the check: a page that is
+# meant to exist in both trees still has to.
+#
+#   mainpage.md            Doxygen accepts a single landing page, so it stays
+#                          English.
+#   development-workflow.md  an operational manual for the current maintainer,
+#                          written in Chinese because that is who reads it. An
+#                          English version earns its place when there is an
+#                          English-speaking contributor to read it.
 ENGLISH_ONLY = {"mainpage.md"}
+CHINESE_ONLY = {"development-workflow.md"}
 
 IDENTIFIER_RE = re.compile(r"\b(?:ql|QLIB)_[A-Za-z0-9_]+\b")
 
@@ -61,7 +70,7 @@ def main():
     for page in sorted(english - chinese - ENGLISH_ONLY):
         print(f"MISSING TRANSLATION  docs/{page} has no docs/zh/{page}", file=sys.stderr)
         problems += 1
-    for page in sorted(chinese - english):
+    for page in sorted(chinese - english - CHINESE_ONLY):
         print(f"ORPHAN TRANSLATION   docs/zh/{page} has no docs/{page}", file=sys.stderr)
         problems += 1
 
