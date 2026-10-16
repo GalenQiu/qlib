@@ -1,6 +1,6 @@
 # qlib
 A general purpose industrial C11 library: data structures, algorithms, network utilities and common tools.
-Cross platform: Linux / Windows, MIT license.
+Cross platform: Linux / macOS / Windows, MIT license.
 
 ## Features
 - C11
@@ -21,6 +21,29 @@ Cross platform: Linux / Windows, MIT license.
 | `<qlib/ql_mem.h>` | `ql_allocator_t` and the overflow checked allocation helpers |
 | `<qlib/ql_vector.h>` | `ql_vector_t`, a growable array of fixed size elements |
 | `<qlib/qlib.h>` | umbrella header pulling in all of the above |
+
+## Documentation
+
+The full documentation lives in [`docs/`](docs/README.md):
+
+- **User guide** — [getting started](docs/user/getting-started.md),
+  [integration](docs/user/integration.md),
+  [error handling](docs/user/errors.md),
+  [memory](docs/user/memory.md),
+  [vector](docs/user/vector.md)
+- **Technical docs** — [architecture](docs/technical/architecture.md),
+  [design decisions](docs/technical/design-decisions.md),
+  [ABI and versioning](docs/technical/abi-and-versioning.md),
+  [portability](docs/technical/portability.md),
+  [build system](docs/technical/build-system.md),
+  [testing](docs/technical/testing.md)
+
+The API reference is generated with Doxygen:
+
+```bash
+cmake -S . -B build -DQLIB_BUILD_DOCS=ON
+cmake --build build --target docs      # writes docs/html/index.html
+```
 
 ## Build
 ```bash

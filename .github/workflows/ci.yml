@@ -136,6 +136,42 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
+  # Documentation. Building it in CI is what keeps Doxyfile.in honest: a typo
+  # or a stale input path fails here rather than silently producing a partial
+  # reference for a release.
+  # ---------------------------------------------------------------------------
+  docs:
+    name: docs / doxygen
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
+
+      - name: Configure
+        run: cmake -S . -B build -DQLIB_BUILD_DOCS=ON -DQLIB_BUILD_TESTS=OFF
+
+      - name: Build the API reference
+        run: cmake --build build --target docs 2>&1 | tee build/doxygen.log
+
+      - name: Check the output
+        run: |
+          test -f docs/html/index.html
+          echo "docs/html/index.html generated"
+          if grep -qE "warning:" build/doxygen.log; then
+            echo "::warning::Doxygen reported warnings"
+            grep -E "warning:" build/doxygen.log
+          fi
+
+      - name: Upload the reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-reference
+          path: docs/html
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
   # Install tree: find_package() and pkg-config must both work for a downstream
   # consumer. Guards the export rules in the top level CMakeLists.txt.
   # ---------------------------------------------------------------------------

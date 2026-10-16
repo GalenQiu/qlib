@@ -1,0 +1,89 @@
+# Doxygen configuration for qlib.
+#
+# This is a curated configuration, not the full file `doxygen -g` produces:
+# only the settings that actually differ from the defaults are listed. CMake
+# fills in the at-sign placeholders and runs Doxygen; see QLIB_BUILD_DOCS in the
+# top level CMakeLists.txt. docs/README.md documents the manual route.
+#
+# NOTE: never write an at-sign-delimited token in these comments. CMake's
+# configure_file(@ONLY) substitutes every one it finds, comments included, and
+# replaces an unknown name with an empty string -- which silently mangles the
+# comment rather than failing the configure.
+
+# ---------------------------------------------------------------------------
+# Project
+# ---------------------------------------------------------------------------
+PROJECT_NAME           = @PROJECT_NAME@
+PROJECT_NUMBER         = @PROJECT_VERSION@
+PROJECT_BRIEF          = "@PROJECT_DESCRIPTION@"
+OUTPUT_DIRECTORY       = @PROJECT_SOURCE_DIR@/docs
+
+# ---------------------------------------------------------------------------
+# Input
+#
+# The public headers carry the API documentation; src/ is included so the
+# documented static helpers show up; docs/ supplies the Markdown pages and
+# README.md is pulled in so it appears in the generated tree as well.
+# ---------------------------------------------------------------------------
+INPUT                  = @PROJECT_SOURCE_DIR@/include \
+                         @PROJECT_SOURCE_DIR@/src \
+                         @PROJECT_SOURCE_DIR@/docs \
+                         @PROJECT_SOURCE_DIR@/README.md
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.h *.md
+USE_MDFILE_AS_MAINPAGE = @PROJECT_SOURCE_DIR@/docs/mainpage.md
+
+# Keep generated output and build trees out of the input scan.
+EXCLUDE_PATTERNS       = */docs/html/* */docs/latex/* */build*/* */tests/* */fuzz/*
+
+# ---------------------------------------------------------------------------
+# Extraction
+# ---------------------------------------------------------------------------
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_ALL            = NO
+EXTRACT_STATIC         = YES
+HIDE_UNDOC_MEMBERS     = NO
+SHOW_INCLUDE_FILES     = YES
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = YES
+REFERENCED_BY_RELATION = NO
+REFERENCES_RELATION    = NO
+JAVADOC_AUTOBRIEF      = NO
+TAB_SIZE               = 4
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_DYNAMIC_SECTIONS  = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+SEARCHENGINE           = YES
+
+# ---------------------------------------------------------------------------
+# Diagrams: enabled only when CMake found Graphviz. Nothing in qlib depends on
+# dot, so a plain build works without it.
+# ---------------------------------------------------------------------------
+HAVE_DOT               = @DOXYGEN_HAVE_DOT@
+DOT_IMAGE_FORMAT       = svg
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+DOT_CLEANUP            = YES
+
+# ---------------------------------------------------------------------------
+# Diagnostics
+# ---------------------------------------------------------------------------
+QUIET                  = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_LOGFILE           =

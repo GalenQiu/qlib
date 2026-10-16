@@ -31,8 +31,21 @@ option(QLIB_SHARED      "Build shared library"        OFF)
 option(QLIB_WERROR      "Treat compiler warnings as errors" OFF)
 option(QLIB_INSTALL     "Generate install and package config rules" ON)
 option(QLIB_SANITIZE    "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(QLIB_BUILD_DOCS  "Generate the API reference with Doxygen" OFF)
 
-# The C11 requirement travels with the target, so consumers inherit it.
+# C11 with no compiler extensions, as CONTRIBUTING rule 1 requires.
+#
+# These are the directory-level defaults for the C_STANDARD, C_STANDARD_REQUIRED
+# and C_EXTENSIONS target properties, so they cover the library, the tests and
+# the fuzz targets. target_compile_features() alone is NOT enough: it expresses
+# a minimum, so a compiler whose default dialect already satisfies c_std_11 gets
+# no -std= flag at all and builds as, say, C23. C_STANDARD_REQUIRED plus
+# C_EXTENSIONS OFF is what actually pins the dialect.
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+# The C11 requirement also travels with the target, so consumers inherit it.
 set(QLIB_C_STANDARD c_std_11)
 
 # ---------------------------------------------------------------------------
@@ -159,6 +172,35 @@ endif()
 
 if(QLIB_BUILD_NET)
     message(WARNING "qlib: QLIB_BUILD_NET=ON but the network module is not implemented yet; nothing will be built.")
+endif()
+
+# ---------------------------------------------------------------------------
+# Documentation
+#
+# A hand maintained Doxyfile.in rather than doxygen_add_docs(): it keeps the
+# configuration readable and lets docs/README.md document a manual Doxygen run
+# that does not go through CMake at all.
+# ---------------------------------------------------------------------------
+if(QLIB_BUILD_DOCS)
+    find_package(Doxygen REQUIRED OPTIONAL_COMPONENTS dot)
+
+    set(DOXYGEN_HAVE_DOT NO)
+    if(DOXYGEN_DOT_FOUND)
+        set(DOXYGEN_HAVE_DOT YES)
+    endif()
+
+    configure_file(
+        "${PROJECT_SOURCE_DIR}/docs/Doxyfile.in"
+        "${PROJECT_BINARY_DIR}/Doxyfile"
+        @ONLY
+    )
+
+    add_custom_target(docs
+        COMMAND "${DOXYGEN_EXECUTABLE}" "${PROJECT_BINARY_DIR}/Doxyfile"
+        WORKING_DIRECTORY "${PROJECT_BINARY_DIR}"
+        COMMENT "Generating the qlib API reference in docs/html"
+        VERBATIM
+    )
 endif()
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,133 @@
+# Design Decisions
+
+Each section records one decision as Context / Decision / Consequences. Cross-references point at the file where the decision is visible in code.
+
+---
+
+## ADR-1: Opaque public types, with value-semantics structs as a named exception
+
+**Context.** The library wants ABI stability, so callers must not be able to compute `sizeof` or a member offset of a library-owned object. At the same time a few types exist purely so that users can build them on the stack and hand them over — the allocator callback table is the only one that survives today.
+
+**Decision.** Container types are incomplete in the public header. `ql_vector_t` is declared as `typedef struct ql_vector ql_vector_t;` in [`ql_vector.h`](../../include/qlib/ql_vector.h) and defined only in `src/ql_vector.c`. Types that users must construct are complete structs, and every such struct carries trailing `void* reserved[]` fields. The rule and the exception are written down in [CONTRIBUTING.md](../../CONTRIBUTING.md) rule 2.
+
+**Consequences.** A container can gain, lose or reorder private fields without an ABI break. The cost is one heap allocation for the control block (`ql_vector_create()` allocates `struct ql_vector`, and the element buffer only on first growth), and accessors instead of direct field reads. Adding a new opaque container is cheap; adding a new *exposed* struct requires justifying the exception.
+
+---
+
+## ADR-2: `reserved[]` inside exposed structs
+
+**Context.** `ql_allocator_t` is passed by value across the ABI, so its layout is frozen the moment it ships. Future needs (aligned allocation, a `calloc` slot, a size field for versioning) would otherwise force a new type or a breaking change.
+
+**Decision.** `ql_allocator_t` ends with `void* reserved[4]`, documented as "Reserved for future growth (aligned allocation, ...). Must be zeroed." New members are only ever taken from this array. `ql_default_allocator()` leaves them zero because `ql_default_alloc` in `src/ql_mem.c` is initialised with designated initialisers, so all unlisted members are zero-initialised.
+
+**Consequences.** Four pointers of headroom (32 bytes on LP64) cost nothing at call time and buy a compatible growth path. Two obligations come with it: the header states the struct's layout is fixed, and callers that build an allocator by hand must zero the array — a partially filled struct is a caller bug, not something the library detects. The array is finite: once it is exhausted, any further growth needs a versioned struct or an accessor-based interface.
+
+---
+
+## ADR-3: Allocators are passed by value and copied into containers
+
+**Context.** A container needs an allocator for its whole lifetime, not just for the call that created it. The two options are storing a pointer to the caller's `ql_allocator_t` or copying the struct.
+
+**Decision.** `ql_vector_create()` copies: `vec->alloc = alloc != NULL ? *alloc : ql_default_allocator();`. The header states "The allocator is copied into the vector, so the caller's struct does not need to outlive the call." `ql_vector_destroy()` copies the allocator out into a local before freeing the control block, so the final free does not read from memory it is about to release.
+
+**Consequences.** A stack-allocated allocator works as long as it lives through the create call, which removes a common class of dangling-pointer bug. The flip side is that later mutations of the caller's struct — including changing `userdata` — have no effect on an existing container; the copy is made once and never re-read. Copying also means the library never dereferences caller storage during normal operation, which is friendlier to embedders that keep their allocator in a shared library that may unload.
+
+---
+
+## ADR-4: A `NULL` allocator means "use the default"
+
+**Context.** Requiring every call site to fetch and pass a `ql_allocator_t` makes the common case verbose and pushes embedders toward a global. Conversely, the library cannot invent an allocator implicitly.
+
+**Decision.** Every helper in [`ql_mem.h`](../../include/qlib/ql_mem.h) accepts `const ql_allocator_t*`, and `NULL` resolves to the built-in libc allocator via `ql_alloc_resolve()`. All three function pointers in a *non-NULL* struct must be non-NULL; that requirement is documented but not re-checked, because these are the allocation hot path.
+
+**Consequences.** `ql_alloc(NULL, 64)` and `ql_vector_create(NULL, sizeof(int), &v)` read well and keep the fast path branch-light. The trade-off is that a partially filled struct is undefined behaviour rather than a diagnosed error — `ql_alloc_resolve()` only tests the pointer for `NULL`. Callers that want a partial allocator rejected should validate it themselves.
+
+---
+
+## ADR-5: Overflow-checked multiplication instead of wrapping arithmetic
+
+**Context.** `count * size` is the standard way to compute an allocation size and the standard way to introduce a heap overflow. `size_t` arithmetic wraps silently, so a wrapped product looks like a small, satisfiable request.
+
+**Decision.** `ql_size_mul_overflow(count, size, result)` exists as a public function and is the only sanctioned way to compute an element-block size. It returns `QL_ERR_INVALID_ARG` for a NULL `result`, `QL_ERR_OVERFLOW` when `count != 0 && size > SIZE_MAX / count`, and `QL_OK` otherwise; on failure `*result` is **left unmodified**. `ql_alloc_array()`, `ql_realloc_array()` and `ql_calloc()` are built on it, and [CONTRIBUTING.md](../../CONTRIBUTING.md) rule 10 forbids computing the product by hand.
+
+**Consequences.** The check is division-based, so it costs one division per array allocation — negligible against the allocator call that follows. Because the output is untouched on failure, a caller can initialise its variable once and rely on the value being either correct or untouched, never a wrapped half-result. The zero-count case is exempted explicitly (`count != 0`), since `0 * anything` is legitimately `0` and `SIZE_MAX` as an element size with a count of zero must not be reported as overflow.
+
+---
+
+## ADR-6: Helpers return `NULL` and also raise an error
+
+**Context.** An allocation helper must return something when it fails. The library also offers an error handler, and the two mechanisms overlap.
+
+**Decision.** The helpers return `NULL` — the only sane sentinel for "no block" — and independently call `ql_err_raise()` before returning. `ql_alloc()` and `ql_realloc()` raise `QL_ERR_NOMEM`; the array helpers and `ql_calloc()` raise `QL_ERR_OVERFLOW`. `ql_realloc()` documents libc semantics: on failure the original block is untouched and still owned by the caller. `ql_err_raise()` is a no-op when no handler is installed.
+
+**Consequences.** Callers choose their style: check the pointer, or centralise logging in the handler, or both. Two consequences need stating. First, the failure is reported twice if the caller acts on both, so the handler should log and the caller should branch, not the reverse. Second, all array helpers raise the same generic message (for example `"ql_calloc: element count overflows size_t"`), so the message identifies the operation but not the caller's variable — allocation-time context has to come from the handler's own captured state.
+
+---
+
+## ADR-7: `ql_strerror()` is total, and its switch has no `default:`
+
+**Context.** `ql_strerror()` takes an enum, but the value can arrive from outside the enum's range — a corrupted struct, a cast from an `int` returned by another API, a value written by a newer library version than the caller's header.
+
+**Decision.** The switch lists all fourteen enumerators and has **no `default:` clause**; a `return "unknown error";` sits after it, and the function is documented as never returning NULL. The absence of `default:` is deliberate and commented in `src/ql_common.c`: it makes `-Wswitch` (part of `-Wall`) fail the build when a new enumerator is added and forgotten here.
+
+**Consequences.** The function is total — no caller needs a NULL check — and adding a new error code produces a compile error instead of a silent "unknown error". The cost is that the string-builder's switch must be kept exhaustive by hand, and that `-Wswitch` only protects builds where warnings are on; `QLIB_WERROR=ON` in CI is what turns the reminder into a hard failure.
+
+---
+
+## ADR-8: `EAGAIN` and `ENOTSUP` are used directly, not through their aliases
+
+**Context.** POSIX defines aliases that are equal in value to other constants: `EWOULDBLOCK == EAGAIN` and `EOPNOTSUPP == ENOTSUP` on glibc. `ql_ret_from_errno()` could reasonably want to accept either spelling.
+
+**Decision.** Only the primary names are used; `EWOULDBLOCK` and `EOPNOTSUPP` are deliberately omitted from the switch in `src/ql_common.c`, and the reason is recorded in a comment there.
+
+**Consequences.** Writing both spellings of an alias in the same `switch` gives two `case` labels with the same value, which is a compile error, not a warning — so the alias form could not have been added "for completeness" on any platform where the two are equal. The behaviour is nevertheless complete, since an alias is the same integer and matches the primary `case`. The subtlety that remains is cosmetic: a reader looking for `EWOULDBLOCK` in the function will not find it, hence the comment.
+
+---
+
+## ADR-9: `push_back` and `insert` pin an element that aliases the vector
+
+**Context.** Nothing stops a caller writing `ql_vector_push_back(vec, ql_vector_at(vec, 0))`. Two operations destroy the source pointer in that case: growth calls `realloc`, which may move and free the buffer, and `insert` calls `memmove`, which shifts the very bytes being read.
+
+**Decision.** `ql_vector_pin_elem()` tests the argument with `ql_vector_contains()` — a range test against `[data, data + size * elem_size)`. When the pointer is inside the live buffer it allocates `elem_size` bytes of scratch, copies the element there, and returns the scratch pointer in place of the caller's. `push_back()` and `insert()` free the scratch on every exit path. `ql_vector_assign()` has the same hazard in a cheaper form and uses `memmove` rather than `memcpy`, since overlapping regions within one buffer are the only case `assign` can create.
+
+**Consequences.** Self-referential calls are well-defined instead of a use-after-free, and the guard is exercised by dedicated tests that run on an allocator whose `realloc` always moves the block, so the bug cannot hide behind a benign in-place `realloc`. The cost is a range comparison on every `push_back` and `insert`, plus a temporary allocation in the aliasing case only. That allocation is itself fallible, so an aliasing `push_back` can fail with `QL_ERR_NOMEM` even when the vector had spare capacity.
+
+---
+
+## ADR-10: Geometric growth with an explicit doubling-overflow branch
+
+**Context.** Growing by one element per `push_back` makes appending quadratic. Doubling is the usual answer, but `capacity * 2` itself overflows for capacity above `SIZE_MAX / 2`.
+
+**Decision.** `ql_vector_grow()` starts from `QL_VECTOR_MIN_CAPACITY` (8) when the vector has no capacity, doubles while `new_capacity < min_capacity`, and stops doubling once `new_capacity > SIZE_MAX / 2`, at which point it requests exactly `min_capacity`. The byte count is then validated with `ql_size_mul_overflow()`.
+
+**Consequences.** Amortised appending is O(1). Observed behaviour on this checkout: the first `push_back` takes capacity from 0 to 8; capacity stays 8 through the eighth element and becomes 16 on the ninth; `reserve(8)` yields capacity 8 and a later `reserve(4)` leaves it at 8. The overflow branch means the loop terminates even for a `min_capacity` near `SIZE_MAX`, and the failure surfaces as `QL_ERR_OVERFLOW` rather than as a small allocation. On failure `vec->data` and `vec->capacity` are untouched, so a rejected grow never loses existing elements. Doubling does mean up to 2× memory overhead versus a size-exact allocation, and capacity is never returned to the allocator — there is no `shrink_to_fit`.
+
+---
+
+## ADR-11: `resize()` zero-fills, `clear()` retains capacity
+
+**Context.** A caller that grows a vector and reads the new elements needs a defined initial value. At the same time, a caller that resets a vector to reuse it does not want to pay for re-allocation.
+
+**Decision.** `ql_vector_resize()` zero-fills the newly exposed region with `memset` after reserving; shrinking only lowers `size`, leaving the bytes in place until overwritten. `ql_vector_clear()` sets `size = 0` and touches nothing else. Both are documented in [`ql_vector.h`](../../include/qlib/ql_vector.h).
+
+**Consequences.** Reading an element obtained from `resize()` is always defined, which removes a whole class of uninitialised-read bugs and is asserted by the tests. `clear()` is O(1) and makes a fill/drain loop allocation-free after the first pass. The cost is that `resize()` writes memory that a caller who is about to fill every element did not need written, and that shrinking does not reduce capacity, so a vector that once held a million elements keeps that buffer until it is destroyed.
+
+---
+
+## ADR-12: `ql_lock_t` was removed rather than half-implemented
+
+**Context.** An earlier revision of [`ql_common.h`](../../include/qlib/ql_common.h) declared a lock adapter (`ql_lock_t` plus `ql_lock_fn`/`ql_unlock_fn`) as a forward-looking hook for thread safety. Nothing constructed one and nothing consumed one: the types had no setter and no implementation, so no compiler or test would have noticed if the semantics were wrong.
+
+**Decision.** The types were deleted. No concurrent container exists yet, and a correct implementation needs a POSIX path and a Win32 path, each with a thread-driven test — macOS provides no C11 `<threads.h>`, so a single portable test is not available. `ql_allocator_t.reserved[]` (ADR-2) exists precisely so the capability can return without an ABI break.
+
+**Consequences.** The public API contains no types that cannot be used, and the README no longer advertises a lock adapter. The cost is a genuine loss of a planned feature, which must be reintroduced with its implementation and tests together when the first concurrent module lands. The alternative — shipping the declarations now so the header "looks complete" — was rejected because untested cross-platform threading code is worse than an absent feature.
+
+---
+
+## ADR-13: `ql_aligned_alloc` is deferred
+
+**Context.** Aligned allocation is eventually needed (SIMD buffers, cache-line-separated structures). It does not fit the current allocator contract: `ql_allocator_t` has no aligned slot, so `ql_aligned_alloc()` could not honour a custom allocator. It is also not portable in the obvious form — C11 `aligned_alloc` requires the size to be a multiple of the alignment, and MSVC does not provide it at all, offering `_aligned_malloc`/`_aligned_free` instead.
+
+**Decision.** Not implemented. `reserved[4]` is the reserved room for the aligned function pointers, and the header comment names aligned allocation as the intended first use.
+
+**Consequences.** No untested, half-specified aligned-allocation API ships, and the library does not have to document a platform-dependent size/alignment coupling that callers would get wrong. The deferral has a price when it lands: adding slots to `ql_allocator_t` must go through `reserved[]`, `ql_default_allocator()` must fill them, and a fallback path is still needed for custom allocators that leave them zero. The rule that memory goes through `ql_allocator_t` (rule 7 in [CONTRIBUTING.md](../../CONTRIBUTING.md)) is what makes this a design task rather than a wrapper around `posix_memalign`.

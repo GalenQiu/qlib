@@ -1,8 +1,8 @@
 ---
 # Static analysis gate. Verified against clang-tidy 23 (see CI).
 #
-# tests/ inherits this file but disables checks that misfire on the assertion
-# macros -- see tests/.clang-tidy.
+# tests/ inherits this file but disables two checks that are inappropriate for
+# test code -- see tests/.clang-tidy.
 #
 # Checks deliberately disabled, each for a concrete reason:
 #   -bugprone-easily-swappable-parameters: unavoidable with the uniform
