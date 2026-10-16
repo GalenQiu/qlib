@@ -152,8 +152,17 @@ for j in json.load(sys.stdin)['jobs']:
 
 或直接打开 `https://github.com/qiugangsic/qlib/actions`。
 
-> 未认证的 GitHub API 每小时限 60 次请求。别写轮询间隔小于 20 秒的脚本，一个 run
-> 的 40 次轮询就能把配额吃光。
+> 未认证的 GitHub API **每小时只有 60 次请求**，很容易吃光——写这份文档时就吃了一
+> 次。别写轮询间隔小于 20 秒的脚本；一个 run 轮询 40 次就没了。想要更多额度就配一个
+> token（`Authorization: Bearer <token>`）。
+
+**只想看"绿不绿"的话，用徽章，不要用 API。** 徽章走的是 `github.com` 而不是
+`api.github.com`，不受配额限制：
+
+```bash
+curl -sSL "https://github.com/qiugangsic/qlib/actions/workflows/ci.yml/badge.svg?branch=main" \
+  | grep -oE 'passing|failing'
+```
 
 ### 3.6 CI 红了怎么办
 
