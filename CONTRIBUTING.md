@@ -15,24 +15,36 @@
 8. Platform specific code guarded by `_WIN32` / `__linux__`.
 
 ## Code format
-Use clang-format.
+
+Use clang-format **23.1.1**. CI enforces this exact version, because formatting
+output differs between releases.
 ```bash
 clang-format -i src/*.c include/qlib/*.h tests/*.c tests/*.h
 ```
 
 ## Static check
 
-clang-tidy before commit.
+The rules live in `.clang-tidy`, with `tests/.clang-tidy` disabling two checks
+that misfire on the assertion macros. Any finding is an error. Run clang-tidy
+**23.1**:
+```bash
+cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+clang-tidy src/*.c tests/*.c -p build
+```
 
 ## Test
 
-- Add unit test for every new feature / bugfix.
-- Run tests with ASAN.
+- Add a unit test for every new feature and every bugfix.
+- Declare each new suite in `tests/test_suites.h` and run it from
+  `tests/test_main.c`.
+- Run the suite under sanitizers:
+```bash
+cmake -S . -B build -DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
-cmake -DCMAKE_C_FLAGS="-fsanitize=address -g" ..
-make
-./bin/qlib_test
-```
+- `qlib_harness_selftest` contains an assertion that is *supposed* to fail: it
+  proves a failing test actually fails the run. Do not "fix" it.
 
 ## Commit
 

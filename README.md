@@ -37,6 +37,7 @@ cmake --build . --config Debug
 - `QLIB_SHARED=OFF` build shared library instead of static
 - `QLIB_WERROR=OFF` treat warnings as errors (recommended in CI)
 - `QLIB_INSTALL=ON` generate install / package config rules
+- `QLIB_SANITIZE=OFF` build with AddressSanitizer + UndefinedBehaviorSanitizer
 
 ## Using qlib
 

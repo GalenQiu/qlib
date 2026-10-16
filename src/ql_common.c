@@ -1,10 +1,7 @@
 #include "qlib/ql_common.h"
 
-#if defined(_WIN32)
-#  include <malloc.h>
-#else
-#  include <stdlib.h>
-#endif
+/* <stdlib.h> declares malloc/realloc/free on every supported platform. */
+#include <stdlib.h>
 
 static void* ql_def_malloc(size_t size, void* userdata)
 {

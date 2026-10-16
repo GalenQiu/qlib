@@ -1,0 +1,33 @@
+---
+# Static analysis gate. Verified against clang-tidy 23 (see CI).
+#
+# tests/ inherits this file but disables two checks that misfire on the
+# assertion macros -- see tests/.clang-tidy.
+#
+# Two checks are deliberately off:
+#   -bugprone-easily-swappable-parameters: unavoidable with the uniform
+#     (ptr, size, userdata) allocator callback signature.
+#   -readability-magic-numbers: noisy for bit manipulation and math code.
+#   -readability-identifier-length: demands >= 3 character locals, which is
+#     hostile to idiomatic C (n, i, p, ok).
+#
+# NOTE: comments must stay outside the `Checks` block scalar -- YAML treats
+# '#' as content inside a folded block, which would silently corrupt the list.
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -readability-magic-numbers,
+  -readability-identifier-length
+
+# Report diagnostics coming from our own headers, not from system headers or
+# from third party code pulled in through them.
+HeaderFilterRegex: '(include/qlib/|tests/).*\.h$'
+
+# Any finding fails the CI job.
+WarningsAsErrors: '*'
+...

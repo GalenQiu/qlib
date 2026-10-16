@@ -20,9 +20,28 @@ option(QLIB_BUILD_NET   "Build qlib network module"   ON)
 option(QLIB_SHARED      "Build shared library"        OFF)
 option(QLIB_WERROR      "Treat compiler warnings as errors" OFF)
 option(QLIB_INSTALL     "Generate install and package config rules" ON)
+option(QLIB_SANITIZE    "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
 # The C11 requirement travels with the target, so consumers inherit it.
 set(QLIB_C_STANDARD c_std_11)
+
+# ---------------------------------------------------------------------------
+# Sanitizers
+#
+# Applied with directory scope rather than through a target interface, so the
+# flags reach the tests too and never leak into the installed/exported target.
+# ---------------------------------------------------------------------------
+if(QLIB_SANITIZE)
+    if(MSVC)
+        # MSVC ships AddressSanitizer but has no UndefinedBehaviorSanitizer.
+        add_compile_options(/fsanitize=address)
+        add_link_options(/fsanitize=address)
+    else()
+        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -g)
+        add_link_options(-fsanitize=address,undefined)
+    endif()
+    message(STATUS "qlib: sanitizers enabled (QLIB_SANITIZE=ON)")
+endif()
 
 # ---------------------------------------------------------------------------
 # Warning flags, shared by every target we build ourselves.

@@ -1,0 +1,200 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A failing ctest prints the failing test's output.
+env:
+  CTEST_OUTPUT_ON_FAILURE: 1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build + test on Linux with both compilers.
+  # ---------------------------------------------------------------------------
+  linux:
+    name: linux / ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang
+        if: matrix.compiler == 'clang'
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
+        run: cmake -S . -B build -DQLIB_WERROR=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build
+
+  # ---------------------------------------------------------------------------
+  # macOS: AppleClang, the other platform we claim to support.
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macos / clang
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DQLIB_WERROR=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build
+
+  # ---------------------------------------------------------------------------
+  # MSVC, static and shared. The shared variant is what actually exercises
+  # QLIB_EXPORT / __declspec(dllexport) and QLIB_STATIC_DEFINE.
+  # ---------------------------------------------------------------------------
+  windows:
+    name: windows / msvc / shared=${{ matrix.shared }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shared: [OFF, ON]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_SHARED=${{ matrix.shared }}
+
+      - name: Build
+        run: cmake --build build --config Debug --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Debug
+
+  # ---------------------------------------------------------------------------
+  # AddressSanitizer + UndefinedBehaviorSanitizer (includes LeakSanitizer).
+  # ---------------------------------------------------------------------------
+  sanitizers:
+    name: sanitizers / asan+ubsan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Configure
+        env:
+          CC: clang
+        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build
+
+  # ---------------------------------------------------------------------------
+  # Install tree: find_package() and pkg-config must both work for a downstream
+  # consumer. Guards the export rules in the top level CMakeLists.txt.
+  # ---------------------------------------------------------------------------
+  package:
+    name: install / find_package + pkg-config
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and install
+        run: |
+          cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX="$PWD/prefix"
+          cmake --build build --parallel
+          cmake --install build
+
+      - name: Create consumer project
+        run: |
+          mkdir -p consumer
+          printf '%s\n' \
+            'cmake_minimum_required(VERSION 3.16)' \
+            'project(consumer LANGUAGES C)' \
+            'find_package(qlib 0.1 REQUIRED)' \
+            'add_executable(app main.c)' \
+            'target_link_libraries(app PRIVATE qlib::qlib)' \
+            > consumer/CMakeLists.txt
+          printf '%s\n' \
+            '#include <qlib/ql_common.h>' \
+            'int main(void) {' \
+            '    ql_allocator_t a = ql_default_allocator();' \
+            '    return a.malloc != NULL ? 0 : 1;' \
+            '}' \
+            > consumer/main.c
+
+      - name: Build consumer with find_package
+        run: |
+          cmake -S consumer -B consumer/build -DCMAKE_PREFIX_PATH="$PWD/prefix"
+          cmake --build consumer/build
+          ./consumer/build/app
+
+      - name: Build consumer with pkg-config
+        run: |
+          export PKG_CONFIG_PATH="$PWD/prefix/lib/pkgconfig"
+          pkg-config --modversion qlib
+          cc consumer/main.c $(pkg-config --cflags --libs qlib) -o consumer/app_pc
+          ./consumer/app_pc
+
+  # ---------------------------------------------------------------------------
+  # Formatting. clang-format output changes between releases, so the version is
+  # pinned here and documented in CONTRIBUTING.md.
+  # ---------------------------------------------------------------------------
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install pinned clang-format
+        run: pip install clang-format==23.1.1
+
+      - name: Check formatting
+        run: |
+          files=$(git ls-files '*.c' '*.h')
+          echo "checking: $files"
+          clang-format --dry-run --Werror $files
+
+  # ---------------------------------------------------------------------------
+  # Static analysis. PyPI has no clang-tidy beyond 18.x, so this comes from
+  # LLVM's apt repository, pinned to the 23.1 series the rules were verified
+  # against.
+  # ---------------------------------------------------------------------------
+  tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy 23
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /usr/share/keyrings/llvm.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-23 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy-23
+
+      - name: Configure for the compilation database
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Analyse
+        run: clang-tidy-23 src/*.c tests/*.c -p build
