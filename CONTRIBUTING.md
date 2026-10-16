@@ -13,6 +13,12 @@
 6. `assert()` only for internal invariant checks, not user input validation.
 7. Memory must go through `ql_allocator_t`, never direct malloc/realloc/free.
 8. Platform specific code guarded by `_WIN32` / `__linux__`.
+9. Every public function is marked `QLIB_EXPORT`, and uses `QLIB_NODISCARD`
+   when ignoring the result would be a bug.
+10. Array allocations go through `ql_alloc_array` / `ql_realloc_array` so the
+    `count * size` multiplication is overflow checked. Never compute it by hand.
+11. Errors raised inside the library go through `ql_err_raise()` (declared in
+    `src/ql_internal.h`), which forwards to the user's error handler.
 
 ## Code format
 

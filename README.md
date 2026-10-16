@@ -4,9 +4,9 @@ Cross platform: Linux / Windows, MIT license.
 
 ## Features
 - C11
-- Abstract memory allocator, replaceable
-- Optional lock adapter for thread safety
-- Unified error callback
+- Abstract memory allocator, replaceable, with overflow checked array helpers
+- Unified error codes with `ql_strerror`/`ql_ret_from_errno` and an optional
+  error callback
 - Opaque types for ABI stability
 - Fully testable: minunit unit test, libFuzzer, benchmark
 - Modular & optional components (network module can be disabled)
@@ -40,6 +40,29 @@ cmake --build . --config Debug
 - `QLIB_SANITIZE=OFF` build with AddressSanitizer + UndefinedBehaviorSanitizer
 
 ## Using qlib
+
+```c
+#include <qlib/qlib.h>
+
+int* values = ql_alloc_array(NULL, 16, sizeof(int)); /* NULL == default allocator */
+if (values == NULL) {
+    /* ql_strerror() turns any ql_ret_t into a message */
+}
+values = ql_realloc_array(NULL, values, 32, sizeof(int));
+ql_dealloc(NULL, values);
+```
+
+`ql_alloc`, `ql_calloc`, `ql_alloc_array` and `ql_realloc_array` are all
+overflow checked and report failures through the optional error handler:
+
+```c
+static void on_error(ql_ret_t code, const char* message, void* userdata) {
+    fprintf(stderr, "qlib: %s (%s)\n", message, ql_strerror(code));
+    (void)userdata;
+}
+
+ql_set_error_handler(on_error, NULL);
+```
 
 ### As a CMake subdirectory
 ```cmake

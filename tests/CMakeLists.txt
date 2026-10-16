@@ -9,6 +9,7 @@ add_executable(qlib_test
     minunit.c
     test_main.c
     test_common.c
+    test_mem.c
 )
 
 target_link_libraries(qlib_test PRIVATE qlib::qlib qlib_warnings)

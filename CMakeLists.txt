@@ -77,9 +77,10 @@ endif()
 # ---------------------------------------------------------------------------
 # Library target
 # ---------------------------------------------------------------------------
-# M0 source files: only ql_common
+# M1 source files: ql_common (errors/version) and ql_mem (allocator)
 set(QLIB_SRC
     src/ql_common.c
+    src/ql_mem.c
 )
 
 if(QLIB_SHARED)

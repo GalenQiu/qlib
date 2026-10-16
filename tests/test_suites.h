@@ -10,5 +10,6 @@
  */
 
 MU_DECLARE_SUITE(test_suite_common);
+MU_DECLARE_SUITE(test_suite_mem);
 
 #endif /* QLIB_TEST_SUITES_H */

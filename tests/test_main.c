@@ -3,6 +3,7 @@
 int main(void)
 {
     MU_RUN_SUITE(test_suite_common);
+    MU_RUN_SUITE(test_suite_mem);
     MU_REPORT();
     return MU_EXIT_CODE;
 }

@@ -19,4 +19,9 @@ IndentPPDirectives: AfterHash
 PPIndentWidth: 2
 # Do not pad macro line continuations out to ColumnLimit.
 AlignEscapedNewlines: Left
+# NOTE: individual brace overrides live in BraceWrapping, which clang-format
+# only honours under `BreakBeforeBraces: Custom`. Rather than restate the whole
+# Allman matrix, we accept Allman applying to `extern "C"` as well. Without
+# NoIndent, putting that brace on its own line indents the entire header body.
+IndentExternBlock: NoIndent
 ...

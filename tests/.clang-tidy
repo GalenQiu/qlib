@@ -8,5 +8,8 @@
 # They stay enabled for the library itself, where an ignored return value is a
 # real defect.
 InheritParentConfig: true
-Checks: '-cert-err33-c,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+Checks: >
+  -cert-err33-c,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -readability-function-cognitive-complexity
 ...
