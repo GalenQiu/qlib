@@ -51,6 +51,13 @@ ctest --test-dir build --output-on-failure
 ```
 - `qlib_harness_selftest` contains an assertion that is *supposed* to fail: it
   proves a failing test actually fails the run. Do not "fix" it.
+- Every module that parses or transforms input should get a libFuzzer target
+  under `fuzz/`, registered in `fuzz/CMakeLists.txt`:
+```bash
+CC=clang cmake -S . -B build -DQLIB_BUILD_FUZZ=ON
+cmake --build build
+./build/bin/fuzz_vector -max_total_time=60
+```
 
 ## Commit
 

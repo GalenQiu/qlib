@@ -1,6 +1,7 @@
 # Build directories
 build/
 _build/
+build-*/
 cmake-build-*/
 
 # CMake generated files
@@ -32,3 +33,9 @@ install_manifest.txt
 docs/html/
 docs/latex/
 
+
+# libFuzzer artifacts
+crash-*
+leak-*
+timeout-*
+oom-*

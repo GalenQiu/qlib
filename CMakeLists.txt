@@ -13,10 +13,20 @@ include(GenerateExportHeader)
 # ---------------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------------
-option(QLIB_BUILD_TESTS "Build qlib unit tests"       ON)
+# Tests default to ON only when qlib is the top level project, so that a
+# consumer using add_subdirectory() does not silently build our test suite.
+# PROJECT_IS_TOP_LEVEL needs CMake 3.21; this comparison works on 3.16.
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(QLIB_TESTS_DEFAULT ON)
+else()
+    set(QLIB_TESTS_DEFAULT OFF)
+endif()
+
+option(QLIB_BUILD_TESTS "Build qlib unit tests"       ${QLIB_TESTS_DEFAULT})
 option(QLIB_BUILD_BENCH "Build qlib benchmark"        OFF)
-option(QLIB_BUILD_FUZZ  "Build libFuzzer targets"     OFF)
-option(QLIB_BUILD_NET   "Build qlib network module"   ON)
+option(QLIB_BUILD_FUZZ  "Build libFuzzer targets (Clang only)" OFF)
+# Placeholder module: defaulted OFF until there is something to build.
+option(QLIB_BUILD_NET   "Build qlib network module"   OFF)
 option(QLIB_SHARED      "Build shared library"        OFF)
 option(QLIB_WERROR      "Treat compiler warnings as errors" OFF)
 option(QLIB_INSTALL     "Generate install and package config rules" ON)
@@ -77,10 +87,12 @@ endif()
 # ---------------------------------------------------------------------------
 # Library target
 # ---------------------------------------------------------------------------
-# M1 source files: ql_common (errors/version) and ql_mem (allocator)
+# M2 source files: ql_common (errors/version), ql_mem (allocator),
+# ql_vector (dynamic array)
 set(QLIB_SRC
     src/ql_common.c
     src/ql_mem.c
+    src/ql_vector.c
 )
 
 if(QLIB_SHARED)
@@ -134,18 +146,19 @@ if(QLIB_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# Benchmark placeholder
-if(QLIB_BUILD_BENCH)
-    # add_subdirectory(bench)
-endif()
-
-# Fuzz placeholder
+# Fuzz targets (libFuzzer needs Clang; fuzz/CMakeLists.txt reports otherwise)
 if(QLIB_BUILD_FUZZ)
-    # add_subdirectory(fuzz)
+    add_subdirectory(fuzz)
 endif()
 
-# Network module placeholder
+# Placeholder modules. These announce themselves rather than silently doing
+# nothing, which is what a bare `option()` plus empty `if()` used to do.
+if(QLIB_BUILD_BENCH)
+    message(WARNING "qlib: QLIB_BUILD_BENCH=ON but no benchmarks are implemented yet; nothing will be built.")
+endif()
+
 if(QLIB_BUILD_NET)
+    message(WARNING "qlib: QLIB_BUILD_NET=ON but the network module is not implemented yet; nothing will be built.")
 endif()
 
 # ---------------------------------------------------------------------------

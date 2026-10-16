@@ -2,14 +2,13 @@
 # Inherits the repository-wide rules, with two exceptions.
 #
 # MU_CHECK/MU_ASSERT expand to a fprintf() call whose result is deliberately
-# ignored, which trips both of these on every single assertion:
-#   - cert-err33-c
-#   - clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
-# They stay enabled for the library itself, where an ignored return value is a
-# real defect.
+# ignored, which trips cert-err33-c on every single assertion. It stays enabled
+# for the library itself, where an ignored return value is a real defect.
+#
+# readability-function-cognitive-complexity is a metric for production logic;
+# a test function is legitimately a long linear sequence of assertions.
 InheritParentConfig: true
 Checks: >
   -cert-err33-c,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   -readability-function-cognitive-complexity
 ...

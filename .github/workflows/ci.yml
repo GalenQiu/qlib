@@ -104,6 +104,38 @@ jobs:
         run: ctest --test-dir build
 
   # ---------------------------------------------------------------------------
+  # libFuzzer. A short time-boxed run per CI invocation; a found crash makes the
+  # job fail, and the crashing input is uploaded as the artifact.
+  # ---------------------------------------------------------------------------
+  fuzz:
+    name: fuzz / libFuzzer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Configure
+        env:
+          CC: clang
+        run: cmake -S . -B build -DQLIB_BUILD_FUZZ=ON -DQLIB_WERROR=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Fuzz
+        run: ./build/bin/fuzz_vector -max_total_time=120 -max_len=256 -print_final_stats=1
+
+      - name: Upload crashing input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash
+          path: crash-*
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
   # Install tree: find_package() and pkg-config must both work for a downstream
   # consumer. Guards the export rules in the top level CMakeLists.txt.
   # ---------------------------------------------------------------------------

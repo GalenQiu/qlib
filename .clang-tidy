@@ -1,15 +1,25 @@
 ---
 # Static analysis gate. Verified against clang-tidy 23 (see CI).
 #
-# tests/ inherits this file but disables two checks that misfire on the
-# assertion macros -- see tests/.clang-tidy.
+# tests/ inherits this file but disables checks that misfire on the assertion
+# macros -- see tests/.clang-tidy.
 #
-# Two checks are deliberately off:
+# Checks deliberately disabled, each for a concrete reason:
 #   -bugprone-easily-swappable-parameters: unavoidable with the uniform
 #     (ptr, size, userdata) allocator callback signature.
 #   -readability-magic-numbers: noisy for bit manipulation and math code.
 #   -readability-identifier-length: demands >= 3 character locals, which is
 #     hostile to idiomatic C (n, i, p, ok).
+#   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling:
+#     insists on the Annex K *_s functions (memcpy_s, memset_s, ...). Annex K is
+#     optional and glibc and macOS libc do not provide it, so following this
+#     advice would break two of the three platforms we support. memcpy/memset/
+#     memmove are the correct tools here.
+#
+#   -readability-implicit-bool-conversion: in C a comparison yields int, so
+#     `return a < b;` from a bool function is an implicit int -> bool
+#     conversion. That is ordinary C; the check is written for C++ semantics
+#     and its AllowIntegerConditions option only covers conditions, not returns.
 #
 # NOTE: comments must stay outside the `Checks` block scalar -- YAML treats
 # '#' as content inside a folded block, which would silently corrupt the list.
@@ -22,7 +32,9 @@ Checks: >
   readability-*,
   -bugprone-easily-swappable-parameters,
   -readability-magic-numbers,
-  -readability-identifier-length
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
 
 # Report diagnostics coming from our own headers, not from system headers or
 # from third party code pulled in through them.

@@ -8,5 +8,6 @@
 
 #include "qlib/ql_common.h"
 #include "qlib/ql_mem.h"
+#include "qlib/ql_vector.h"
 
 #endif /* QLIB_QLIB_H */

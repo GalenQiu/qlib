@@ -10,6 +10,7 @@ add_executable(qlib_test
     test_main.c
     test_common.c
     test_mem.c
+    test_vector.c
 )
 
 target_link_libraries(qlib_test PRIVATE qlib::qlib qlib_warnings)
