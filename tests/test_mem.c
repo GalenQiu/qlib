@@ -346,6 +346,193 @@ MU_TEST(test_failed_realloc_keeps_original_block)
     ql_set_error_handler(NULL, NULL);
 }
 
+/* ---------------------------------------------------------------------------
+ * Aligned allocation
+ * ------------------------------------------------------------------------ */
+
+/** @brief None of the alignments below overflow the padded size. */
+static const size_t k_alignments[] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 4096};
+
+MU_TEST(test_size_add_overflow)
+{
+    size_t out = 123;
+
+    MU_CHECK(ql_size_add_overflow(3, 4, &out) == QL_OK);
+    MU_CHECK(out == 7);
+
+    MU_CHECK(ql_size_add_overflow(0, SIZE_MAX, &out) == QL_OK);
+    MU_CHECK(out == SIZE_MAX);
+
+    /* On failure the result must be left untouched. */
+    out = 999;
+    MU_CHECK(ql_size_add_overflow(SIZE_MAX, 1, &out) == QL_ERR_OVERFLOW);
+    MU_CHECK(out == 999);
+    MU_CHECK(ql_size_add_overflow(1, SIZE_MAX, &out) == QL_ERR_OVERFLOW);
+    MU_CHECK(ql_size_add_overflow(SIZE_MAX, SIZE_MAX, &out) == QL_ERR_OVERFLOW);
+
+    MU_CHECK(ql_size_add_overflow(1, 1, NULL) == QL_ERR_INVALID_ARG);
+}
+
+MU_TEST(test_aligned_alloc_is_aligned_and_writable)
+{
+    size_t i;
+    size_t j;
+
+    for (i = 0; i < sizeof k_alignments / sizeof k_alignments[0]; i++)
+    {
+        size_t alignment = k_alignments[i];
+        unsigned char* p = ql_aligned_alloc(NULL, alignment, 300);
+
+        MU_ASSERT(p != NULL);
+        MU_CHECK(((uintptr_t)p % (uintptr_t)alignment) == 0U);
+
+        /*
+         * Touch every requested byte with a value derived from the index. ASAN
+         * turns a wrong layout -- a header written over the payload, or a block
+         * that is too short -- into an immediate failure here.
+         */
+        for (j = 0; j < 300; j++)
+        {
+            p[j] = (unsigned char)(j & 0xFFU);
+        }
+        for (j = 0; j < 300; j++)
+        {
+            MU_CHECK(p[j] == (unsigned char)(j & 0xFFU));
+        }
+
+        ql_aligned_free(NULL, p);
+    }
+}
+
+MU_TEST(test_aligned_alloc_rejects_bad_alignment)
+{
+    handler_state state = {0, QL_OK, NULL, NULL};
+
+    ql_set_error_handler(record_handler, &state);
+
+    /* Zero is not a power of two, and neither are these. */
+    MU_CHECK(ql_aligned_alloc(NULL, 0, 64) == NULL);
+    MU_CHECK(state.calls == 1);
+    MU_CHECK(state.code == QL_ERR_INVALID_ARG);
+
+    MU_CHECK(ql_aligned_alloc(NULL, 3, 64) == NULL);
+    MU_CHECK(state.calls == 2);
+    MU_CHECK(state.code == QL_ERR_INVALID_ARG);
+
+    MU_CHECK(ql_aligned_alloc(NULL, 6, 64) == NULL);
+    MU_CHECK(ql_aligned_alloc(NULL, 100, 64) == NULL);
+    MU_CHECK(ql_aligned_alloc(NULL, SIZE_MAX, 64) == NULL);
+    MU_CHECK(state.calls == 5);
+    MU_CHECK(state.code == QL_ERR_INVALID_ARG);
+
+    ql_set_error_handler(NULL, NULL);
+}
+
+MU_TEST(test_aligned_alloc_zero_size_is_not_an_error)
+{
+    handler_state state = {0, QL_OK, NULL, NULL};
+
+    ql_set_error_handler(record_handler, &state);
+
+    MU_CHECK(ql_aligned_alloc(NULL, 64, 0) == NULL);
+    MU_CHECK(state.calls == 0); /* no error raised */
+
+    ql_aligned_free(NULL, NULL); /* must be a no-op */
+    MU_CHECK(state.calls == 0);
+
+    ql_set_error_handler(NULL, NULL);
+}
+
+MU_TEST(test_aligned_alloc_goes_through_the_custom_allocator)
+{
+    counting_state state = {0, 0, 0};
+    ql_allocator_t alloc = ql_default_allocator();
+    void* p;
+
+    alloc.malloc = counting_malloc;
+    alloc.realloc = counting_realloc;
+    alloc.free = counting_free;
+    alloc.userdata = &state;
+
+    p = ql_aligned_alloc(&alloc, 64, 128);
+    MU_ASSERT(p != NULL);
+    MU_CHECK(((uintptr_t)p % 64U) == 0U);
+    MU_CHECK(state.mallocs == 1);
+    MU_CHECK(state.frees == 0);
+
+    ql_aligned_free(&alloc, p);
+    MU_CHECK(state.frees == 1);
+    MU_CHECK(state.mallocs == state.frees);
+}
+
+MU_TEST(test_aligned_alloc_failure_raises_nomem)
+{
+    ql_allocator_t alloc = ql_default_allocator();
+    handler_state state = {0, QL_OK, NULL, NULL};
+
+    alloc.malloc = failing_malloc;
+    alloc.realloc = failing_realloc;
+    alloc.free = failing_free;
+
+    ql_set_error_handler(record_handler, &state);
+
+    MU_CHECK(ql_aligned_alloc(&alloc, 32, 64) == NULL);
+    MU_CHECK(state.calls == 1);
+    MU_CHECK(state.code == QL_ERR_NOMEM);
+    MU_CHECK(state.message != NULL);
+
+    ql_set_error_handler(NULL, NULL);
+}
+
+MU_TEST(test_aligned_alloc_rejects_padded_overflow)
+{
+    handler_state state = {0, QL_OK, NULL, NULL};
+
+    ql_set_error_handler(record_handler, &state);
+
+    /*
+     * The padding (alignment + sizeof(void*)) is what overflows, not the user's
+     * size on its own, so this also checks the addition is done on the padded
+     * total rather than only on `size`.
+     */
+    MU_CHECK(ql_aligned_alloc(NULL, 4096, SIZE_MAX - 8) == NULL);
+    MU_CHECK(state.calls == 1);
+    MU_CHECK(state.code == QL_ERR_OVERFLOW);
+
+    ql_set_error_handler(NULL, NULL);
+}
+
+MU_TEST(test_aligned_blocks_are_distinct)
+{
+    unsigned char* a = ql_aligned_alloc(NULL, 64, 64);
+    unsigned char* b = ql_aligned_alloc(NULL, 64, 64);
+    unsigned char* c = ql_aligned_alloc(NULL, 64, 64);
+    size_t i;
+
+    MU_ASSERT(a != NULL);
+    MU_ASSERT(b != NULL);
+    MU_ASSERT(c != NULL);
+
+    MU_CHECK(a != b);
+    MU_CHECK(b != c);
+    MU_CHECK(a != c);
+
+    /* Each block carries its own header, so writing one must not touch another. */
+    memset(a, 0xAA, 64);
+    memset(b, 0xBB, 64);
+    memset(c, 0xCC, 64);
+    for (i = 0; i < 64; i++)
+    {
+        MU_CHECK(a[i] == 0xAA);
+        MU_CHECK(b[i] == 0xBB);
+        MU_CHECK(c[i] == 0xCC);
+    }
+
+    ql_aligned_free(NULL, a);
+    ql_aligned_free(NULL, b);
+    ql_aligned_free(NULL, c);
+}
+
 MU_TEST_SUITE(test_suite_mem)
 {
     MU_RUN_TEST(test_default_allocator_is_complete);
@@ -360,4 +547,12 @@ MU_TEST_SUITE(test_suite_mem)
     MU_RUN_TEST(test_failure_raises_nomem);
     MU_RUN_TEST(test_failure_without_handler_is_safe);
     MU_RUN_TEST(test_failed_realloc_keeps_original_block);
+    MU_RUN_TEST(test_size_add_overflow);
+    MU_RUN_TEST(test_aligned_alloc_is_aligned_and_writable);
+    MU_RUN_TEST(test_aligned_alloc_rejects_bad_alignment);
+    MU_RUN_TEST(test_aligned_alloc_zero_size_is_not_an_error);
+    MU_RUN_TEST(test_aligned_alloc_goes_through_the_custom_allocator);
+    MU_RUN_TEST(test_aligned_alloc_failure_raises_nomem);
+    MU_RUN_TEST(test_aligned_alloc_rejects_padded_overflow);
+    MU_RUN_TEST(test_aligned_blocks_are_distinct);
 }

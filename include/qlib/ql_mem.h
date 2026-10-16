@@ -1,6 +1,16 @@
 #ifndef QLIB_QL_MEM_H
 #define QLIB_QL_MEM_H
 
+/**
+ * @file ql_mem.h
+ * @brief The replaceable allocator, and the overflow checked allocation
+ *        helpers built on it.
+ *
+ * Every allocation in qlib goes through a ql_allocator_t supplied by the
+ * caller. Passing NULL wherever one is expected selects the default,
+ * libc backed allocator.
+ */
+
 #include <stddef.h>
 
 #include "qlib/ql_common.h"
@@ -43,7 +53,7 @@ typedef struct
     ql_free_fn free;
     /** @brief Opaque pointer handed back to every callback. May be NULL. */
     void* userdata;
-    /** Reserved for future growth (aligned allocation, ...). Must be zeroed. */
+    /** Reserved for future growth. Must be zeroed; do not use. */
     void* reserved[4];
 } ql_allocator_t;
 
@@ -68,6 +78,17 @@ QLIB_EXPORT ql_allocator_t ql_default_allocator(void);
  *         On failure @p result is left unmodified.
  */
 QLIB_NODISCARD QLIB_EXPORT ql_ret_t ql_size_mul_overflow(size_t count, size_t size, size_t* result);
+
+/**
+ * @brief Add two sizes, rejecting overflow.
+ *
+ * @param a      First addend.
+ * @param b      Second addend.
+ * @param result Receives @c a+b on success. Must not be NULL.
+ * @return QL_OK, QL_ERR_INVALID_ARG if @p result is NULL, or QL_ERR_OVERFLOW.
+ *         On failure @p result is left unmodified.
+ */
+QLIB_NODISCARD QLIB_EXPORT ql_ret_t ql_size_add_overflow(size_t a, size_t b, size_t* result);
 
 /**
  * @brief Allocate @p size bytes.
@@ -118,6 +139,38 @@ QLIB_NODISCARD QLIB_EXPORT void* ql_realloc_array(const ql_allocator_t* alloc, v
  * @brief Release a block. Passing NULL is a no-op.
  */
 QLIB_EXPORT void ql_dealloc(const ql_allocator_t* alloc, void* ptr);
+
+/**
+ * @brief Allocate @p size bytes aligned to @p alignment.
+ *
+ * @p alignment must be a non-zero power of two. Unlike C11 @c aligned_alloc,
+ * @p size does **not** have to be a multiple of @p alignment.
+ *
+ * The block comes from @p alloc's own @c malloc, so a custom allocator stays in
+ * control of the memory: it is over-allocated by @c alignment+sizeof(void*) and
+ * aligned by hand, which is the per-block overhead. The original pointer is
+ * recorded immediately before the returned address.
+ *
+ * Free the result with ql_aligned_free(), never with ql_dealloc() or libc
+ * @c free: the pointer handed back is not the one the allocator returned. There
+ * is no aligned realloc; allocate, copy and free instead.
+ *
+ * @param alloc     Allocator, or NULL for the default one.
+ * @param alignment Power-of-two alignment in bytes.
+ * @param size      Byte count. A size of 0 returns NULL without calling the
+ *                  allocator and without raising an error.
+ * @return The aligned block, or NULL on failure. QL_ERR_INVALID_ARG is raised
+ *         for a bad alignment, QL_ERR_OVERFLOW if the padded size cannot be
+ *         represented, and QL_ERR_NOMEM if the allocation fails.
+ */
+QLIB_NODISCARD QLIB_EXPORT void* ql_aligned_alloc(const ql_allocator_t* alloc, size_t alignment, size_t size);
+
+/**
+ * @brief Release a block from ql_aligned_alloc(). Passing NULL is a no-op.
+ *
+ * @p alloc must be the same allocator the block was allocated with.
+ */
+QLIB_EXPORT void ql_aligned_free(const ql_allocator_t* alloc, void* ptr);
 
 #ifdef __cplusplus
 }

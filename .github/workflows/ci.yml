@@ -125,14 +125,23 @@ jobs:
         run: cmake --build build --parallel
 
       - name: Fuzz
-        run: ./build/bin/fuzz_vector -max_total_time=120 -max_len=256 -print_final_stats=1
+        run: |
+          for target in fuzz_vector fuzz_mem; do
+            echo "=== $target ==="
+            ./build/bin/$target -max_total_time=120 -max_len=256 -print_final_stats=1
+          done
 
       - name: Upload crashing input
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-crash
-          path: crash-*
+          # Any of libFuzzer's artifact kinds, not just crashes.
+          path: |
+            crash-*
+            oom-*
+            leak-*
+            timeout-*
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------

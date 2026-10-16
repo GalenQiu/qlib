@@ -18,6 +18,9 @@
     `count * size` multiplication is overflow checked. Never compute it by hand.
 11. Errors raised inside the library go through `ql_err_raise()` (declared in
     `src/ql_internal.h`), which forwards to the user's error handler.
+12. Memory from `ql_aligned_alloc()` is released with `ql_aligned_free()`, never
+    with `ql_dealloc()`. The returned pointer is not the one the allocator
+    handed out, so mixing them corrupts the heap rather than failing cleanly.
 
 ## Code format
 

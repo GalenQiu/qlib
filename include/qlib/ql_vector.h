@@ -1,6 +1,15 @@
 #ifndef QLIB_QL_VECTOR_H
 #define QLIB_QL_VECTOR_H
 
+/**
+ * @file ql_vector.h
+ * @brief ql_vector_t, a growable, contiguous array of fixed size elements.
+ *
+ * The type is opaque: its layout is private to the library and may change
+ * without breaking the ABI. Elements are copied bytewise, so element types must
+ * be trivially copyable.
+ */
+
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -77,6 +86,7 @@ QLIB_NODISCARD QLIB_EXPORT ql_ret_t ql_vector_push_back(ql_vector_t* vec, const 
 /**
  * @brief Remove the last element.
  *
+ * @param vec The vector.
  * @param out Receives a copy of the element, or NULL to discard it.
  * @return QL_OK, QL_ERR_INVALID_ARG, or QL_ERR_EMPTY.
  */

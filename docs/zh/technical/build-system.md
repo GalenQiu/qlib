@@ -6,7 +6,7 @@
 |---|---|
 | [`CMakeLists.txt`](../../../CMakeLists.txt) | 根项目：选项、sanitizer、警告目标、库目标、子目录、安装/导出规则 |
 | [`tests/CMakeLists.txt`](../../../tests/CMakeLists.txt) | `qlib_test` 可执行文件与 `qlib_harness_selftest` 探针 |
-| [`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) | `fuzz_vector` libFuzzer 目标 |
+| [`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) | `fuzz_vector` 和 `fuzz_mem` libFuzzer 目标 |
 | [`cmake/qlibConfig.cmake.in`](../../../cmake/qlibConfig.cmake.in) | 供 `find_package(qlib)` 使用的包配置模板 |
 | [`cmake/qlib.pc.in`](../../../cmake/qlib.pc.in) | pkg-config 模板 |
 | [`cmake/cmake_uninstall.cmake.in`](../../../cmake/cmake_uninstall.cmake.in) | 由 `uninstall` 目标运行的脚本 |
@@ -35,7 +35,7 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 | `qlib_warnings` | `INTERFACE` | 根 | — | — |
 | `qlib_test` | 可执行文件 | `tests/` | `qlib::qlib`、`qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `qlib_harness_selftest` | 可执行文件 | `tests/` | 仅 `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
-| `fuzz_vector` | 可执行文件 | `fuzz/` | `qlib::qlib`、`qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
+| `fuzz_vector`、`fuzz_mem` | 可执行文件 | `fuzz/` | `qlib::qlib`、`qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `docs` | 自定义目标 | 根，当 `QLIB_BUILD_DOCS=ON` 时 | — | `docs/html` |
 
 `docs` 是自定义目标，不会被链接进任何东西：它需要用 `cmake --build build --target docs` 显式构建。它需要 Doxygen，并在找到 `dot` 组件时可选地使用 Graphviz。
@@ -48,7 +48,7 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 |---|---|---|
 | `qlib_common_test` | `qlib_test` | `tests/CMakeLists.txt` |
 | `qlib_harness_selftest` | `${CMAKE_COMMAND} -DPROBE=$<TARGET_FILE:qlib_harness_selftest> -P tests/selftest/expect_failure.cmake` | `tests/CMakeLists.txt` |
-| `fuzz_vector_smoke` | `fuzz_vector -runs=2000 -max_len=128` | `fuzz/CMakeLists.txt`，仅当该目标存在时 |
+| `fuzz_vector_smoke`、`fuzz_mem_smoke` | `<target> -runs=2000 -max_len=128` | `fuzz/CMakeLists.txt`，每个目标一个，仅当它们存在时 |
 
 ## 缓存选项
 

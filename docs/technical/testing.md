@@ -148,9 +148,24 @@ Inheriting rather than duplicating keeps the enabled-check list in one place. No
 
 ## Fuzzing
 
-[`fuzz/fuzz_vector.c`](../../fuzz/fuzz_vector.c) is a libFuzzer target, built only when `QLIB_BUILD_FUZZ=ON` and the compiler is Clang (`-fsanitize=fuzzer`). With any other compiler, [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) emits a `WARNING` instead of silently producing nothing.
+There are two libFuzzer targets, both built only when `QLIB_BUILD_FUZZ=ON` and the compiler is Clang (`-fsanitize=fuzzer`). With any other compiler, [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) emits a `WARNING` instead of silently producing nothing.
 
-### What the input bytes mean
+| Target | Guards |
+|---|---|
+| [`fuzz_vector.c`](../../fuzz/fuzz_vector.c) | The container API: growth, shifting, and the element-aliasing paths |
+| [`fuzz_mem.c`](../../fuzz/fuzz_mem.c) | The arithmetic in `ql_mem`: padded sizes, alignment rounding, overflow helpers |
+
+### `fuzz_mem`
+
+The memory module's interesting surface is arithmetic rather than parsing, so the payload selects alignment and size directly and the properties are checked every iteration:
+
+- a non-NULL aligned block really is a multiple of the requested alignment, and all `size` bytes are writable, which ASAN turns into a failure if the layout overruns;
+- an alignment that is not a power of two is refused outright, never turned into a wild pointer;
+- `ql_size_mul_overflow()` and `ql_size_add_overflow()` agree with the arithmetic they guard, and the known-overflowing cases still report `QL_ERR_OVERFLOW`.
+
+The harness carries a load-bearing mask. The "invalid alignment" branch ORs `3` into a raw 32-bit value, because a raw value occasionally lands on a genuine power of two — `0x80000000`, for instance. The library then correctly accepts it and, per its documented contract, attempts to allocate one alignment-sized slab: 2 GiB. The first version of this target omitted the mask and libFuzzer reported `out-of-memory` after about 57000 runs. That was a defect in the harness, not the library.
+
+### `fuzz_vector`
 
 The input is a script of vector operations, one byte per operation:
 
@@ -184,16 +199,16 @@ The element payload is a `uint8_t elem[32]` buffer filled from the input. Its si
 
 ### Results
 
-A fresh run on this checkout:
+Fresh runs on this checkout:
 
 ```text
-Done 6044768 runs in 46 second(s)
-stat::average_exec_per_sec:     131408
+fuzz_vector: Done 6044768 runs in 46 second(s)
+fuzz_mem:    Done 49036278 runs in 61 second(s)
 ```
 
-No findings. Note that the target is compiled with `-fsanitize=fuzzer,address,undefined`, so these runs also cover ASAN and UBSAN.
+No findings. Both targets are compiled with `-fsanitize=fuzzer,address,undefined`, so these runs also cover ASAN and UBSAN.
 
-When `QLIB_BUILD_FUZZ=ON`, ctest additionally registers `fuzz_vector_smoke` (`-runs=2000 -max_len=128`) so a normal `ctest` run exercises the target too.
+When `QLIB_BUILD_FUZZ=ON`, ctest additionally registers a `<target>_smoke` test for each target (`-runs=2000 -max_len=128`), so a normal `ctest` run exercises them too. The CI `fuzz` job runs both for 120 seconds each.
 
 ## Mutation testing
 
@@ -207,6 +222,11 @@ Run against the current code with an ASAN+UBSAN Debug build (`-DQLIB_SANITIZE=ON
 | B | `ql_calloc()`: remove `memset(ptr, 0, total)` | exit 1; `39 tests run, 64 failures` |
 | C | `ql_alloc()`: remove the `QL_ERR_NOMEM` raise | exit 1; `39 tests run, 3 failures` |
 | D | `ql_vector_push_back`/`insert`: bypass `ql_vector_pin_elem()` | exit 1; ASAN reports `heap-use-after-free` |
+| E | `ql_aligned_alloc()`: drop the `sizeof(void*)` skip before rounding up | exit 1; ASAN reports `heap-buffer-overflow` |
+| F | `ql_aligned_alloc()`: drop the power-of-two validation | exit 1; ASAN reports `heap-buffer-overflow` |
+| G | `ql_aligned_alloc()`: store the aligned pointer rather than the raw one in the header | exit 1; ASAN reports `attempting free on address which was not malloc()-ed` |
+
+A–D were run against the 39-test suite; E–G against the 47-test suite that added the aligned-allocation coverage. All three aligned-allocation mutations surface as memory-safety failures rather than as failed assertions, which is the useful outcome: the alignment layout is checked by ASAN even where no assertion targets it directly.
 
 Two observations worth recording:
 

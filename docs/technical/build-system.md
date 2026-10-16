@@ -6,7 +6,7 @@
 |---|---|
 | [`CMakeLists.txt`](../../CMakeLists.txt) | Root project: options, sanitizers, warning target, library target, subdirectories, install/export rules |
 | [`tests/CMakeLists.txt`](../../tests/CMakeLists.txt) | The `qlib_test` executable and the `qlib_harness_selftest` probe |
-| [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) | The `fuzz_vector` libFuzzer target |
+| [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) | The `fuzz_vector` and `fuzz_mem` libFuzzer targets |
 | [`cmake/qlibConfig.cmake.in`](../../cmake/qlibConfig.cmake.in) | Package config template for `find_package(qlib)` |
 | [`cmake/qlib.pc.in`](../../cmake/qlib.pc.in) | pkg-config template |
 | [`cmake/cmake_uninstall.cmake.in`](../../cmake/cmake_uninstall.cmake.in) | Script run by the `uninstall` target |
@@ -35,7 +35,7 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 | `qlib_warnings` | `INTERFACE` | root | — | — |
 | `qlib_test` | executable | `tests/` | `qlib::qlib`, `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `qlib_harness_selftest` | executable | `tests/` | `qlib_warnings` only | `${PROJECT_BINARY_DIR}/bin` |
-| `fuzz_vector` | executable | `fuzz/` | `qlib::qlib`, `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
+| `fuzz_vector`, `fuzz_mem` | executables | `fuzz/` | `qlib::qlib`, `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `docs` | custom target | root, when `QLIB_BUILD_DOCS=ON` | — | `docs/html` |
 
 `docs` is a custom target, not linked into anything: it is built explicitly with `cmake --build build --target docs`. It requires Doxygen, and optionally uses Graphviz when the `dot` component is found.
@@ -48,7 +48,7 @@ Registered tests:
 |---|---|---|
 | `qlib_common_test` | `qlib_test` | `tests/CMakeLists.txt` |
 | `qlib_harness_selftest` | `${CMAKE_COMMAND} -DPROBE=$<TARGET_FILE:qlib_harness_selftest> -P tests/selftest/expect_failure.cmake` | `tests/CMakeLists.txt` |
-| `fuzz_vector_smoke` | `fuzz_vector -runs=2000 -max_len=128` | `fuzz/CMakeLists.txt`, only when the target exists |
+| `fuzz_vector_smoke`, `fuzz_mem_smoke` | `<target> -runs=2000 -max_len=128` | `fuzz/CMakeLists.txt`, one per target, only when they exist |
 
 ## Cache options
 

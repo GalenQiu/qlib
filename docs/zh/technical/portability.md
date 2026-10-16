@@ -92,6 +92,14 @@ C11 标准定义了一个可选的带边界检查的库，即 Annex K，提供 `
 
 Annex K 是可选的，glibc 和 macOS libc 都不提供它。在 `src/ql_vector.c` 中改用 `memcpy_s` 会破坏 CI 支持的三个平台中的两个，而且不存在不会重复实现该检查的可移植垫片。因此 `ql_vector.c`、`ql_mem.c` 和 minunit 测试框架中的普通 `memcpy`、`memmove`、`memset` 调用才是预期使用的工具。
 
+## 无平台分支的对齐分配
+
+超额对齐分配是唯一一处显而易见的实现依赖平台的地方：C11 的 `aligned_alloc`、POSIX 的 `posix_memalign` 和 MSVC 的 `_aligned_malloc`/`_aligned_free` 各自只存在于受支持平台的一个子集上，而 MSVC 那一对连参数顺序都相反。
+
+它们都没有被使用。`ql_aligned_alloc()` 从分配器自己的 `malloc` 中多取 `alignment + sizeof(void*)` 字节的余量，把地址向上取整，并把原始指针存放在对齐块紧前面；`ql_aligned_free()` 读回该头部。结果是一条在任何地方都编译行为一致的单一代码路径，不需要 `#if defined(_WIN32)`，并且——因为分配仍然来自调用方的分配器——保持了所有内存都经过 `ql_allocator_t` 这条规则。
+
+代价记录在[设计决策](design-decisions.md)的 ADR-13 中。与可移植性相关的部分是：这个文件里没有任何针对对齐分配的平台守卫需要测试，因此上面的支持矩阵对它没有逐平台的保留说明。
+
 ## 为什么移除 `ql_lock_t`
 
 更早的版本在 `ql_common.h` 中声明了一个锁适配器（`ql_lock_t`、`ql_lock_fn`、`ql_unlock_fn`）。它被删除而不是被实现，原因之一正是可移植性：

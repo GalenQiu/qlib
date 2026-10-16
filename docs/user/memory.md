@@ -108,8 +108,11 @@ the allocator, meaning the default one.
 | `ql_realloc(alloc, ptr, size)` | `size == 0` frees `ptr` and returns `NULL` |
 | `ql_alloc_array(alloc, count, size)` | `count * size`, overflow checked |
 | `ql_realloc_array(alloc, ptr, count, size)` | As above, for a resize |
+| `ql_aligned_alloc(alloc, alignment, size)` | Over-aligned block; free it with `ql_aligned_free` |
+| `ql_aligned_free(alloc, ptr)` | Releases a block from `ql_aligned_alloc`; `NULL` is a no-op |
 | `ql_dealloc(alloc, ptr)` | `NULL` is a no-op |
-| `ql_size_mul_overflow(count, size, &result)` | The check on its own |
+| `ql_size_mul_overflow(count, size, &result)` | The multiplication check on its own |
+| `ql_size_add_overflow(a, b, &result)` | The addition check on its own |
 
 ```c
 #include <qlib/qlib.h>
@@ -150,8 +153,60 @@ if (ql_size_mul_overflow(count, elem_size, &total) != QL_OK) {
 and `QL_ERR_OVERFLOW` for an overflowing product. On failure `result` is left
 unmodified. A `count` of 0 can never overflow.
 
-Use the array helpers rather than computing the product yourself; this is one
+`ql_size_add_overflow()` is the same check for addition, useful when computing
+a padded or framed size:
+
+```c
+size_t total = 0;
+if (ql_size_add_overflow(payload, header, &total) != QL_OK) {
+    /* payload + header does not fit in size_t */
+}
+```
+
+Use the helpers rather than computing the arithmetic yourself; this is one
 of the project's contribution rules.
+
+## Aligned allocation
+
+`ql_aligned_alloc()` returns memory aligned to a caller-chosen power of two,
+for SIMD buffers, cache-line separation, DMA, or page-aligned I/O.
+
+```c
+#include <qlib/qlib.h>
+
+/* 64-byte aligned, 4096 bytes; free it with ql_aligned_free, not ql_dealloc. */
+void* buf = ql_aligned_alloc(NULL, 64, 4096);
+if (buf == NULL) {
+    /* bad alignment, overflow, or out of memory */
+}
+/* ... use buf ... */
+ql_aligned_free(NULL, buf);
+```
+
+| Parameter | Rule |
+|---|---|
+| `alignment` | A non-zero power of two. Anything else is `QL_ERR_INVALID_ARG` |
+| `size` | Byte count. Unlike C11 `aligned_alloc`, it does **not** have to be a multiple of the alignment |
+
+Rules to respect:
+
+- **Free with `ql_aligned_free()`.** The pointer you get back is not the pointer
+  the allocator returned, so `ql_dealloc()`, `ql_realloc()` and libc `free()`
+  are all wrong on it.
+- Pass the same allocator to `ql_aligned_free()` that you allocated with.
+- There is no aligned realloc. To grow, allocate a new block, copy, and free the
+  old one.
+
+The block is carved out of the allocator's own `malloc`, not from the platform's
+aligned allocator. `ql_aligned_alloc()` asks for `size + alignment +
+sizeof(void*)` bytes, rounds the address up, and stores the original pointer in
+the bytes immediately before the returned address. So a custom allocator stays
+in control of its memory, at the cost of that per-block overhead. Large
+alignments therefore cost proportionally more: a 1 MiB alignment wastes about
+1 MiB per allocation regardless of `size`.
+
+Because the returned pointer is a multiple of `alignment`, it is also suitably
+aligned for any type whose alignment does not exceed it.
 
 ## Failure reporting
 
@@ -165,6 +220,7 @@ handler is there so a central place can observe the failure.
 | Thing | Who frees it |
 |---|---|
 | Memory from `ql_alloc`/`ql_calloc`/`ql_alloc_array`/`ql_realloc*` | You, with `ql_dealloc`, using the same allocator |
+| Memory from `ql_aligned_alloc` | You, with `ql_aligned_free`, using the same allocator |
 | A container from `ql_vector_create` | You, with `ql_vector_destroy`, which releases the buffer and the control block |
 | Pointers from `ql_vector_at`/`ql_vector_data` | Nobody; they point into the container's buffer and are invalidated by mutation |
 | The allocator struct you pass in | You; qlib copies it and never keeps your pointer |

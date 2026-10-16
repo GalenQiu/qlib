@@ -3,25 +3,32 @@
 # producing nothing.
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
 
-    add_executable(fuzz_vector fuzz_vector.c)
-
-    target_link_libraries(fuzz_vector PRIVATE qlib::qlib qlib_warnings)
-
-    target_compile_options(fuzz_vector PRIVATE
-        -fsanitize=fuzzer,address,undefined
-        -fno-omit-frame-pointer
-        -g
-    )
-    target_link_options(fuzz_vector PRIVATE -fsanitize=fuzzer,address,undefined)
-
-    set_target_properties(fuzz_vector PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
+    set(QLIB_FUZZ_TARGETS
+        fuzz_vector
+        fuzz_mem
     )
 
-    # A short deterministic smoke run, so ctest exercises the target too.
-    add_test(NAME fuzz_vector_smoke
-        COMMAND fuzz_vector -runs=2000 -max_len=128
-    )
+    foreach(target IN LISTS QLIB_FUZZ_TARGETS)
+        add_executable(${target} ${target}.c)
+
+        target_link_libraries(${target} PRIVATE qlib::qlib qlib_warnings)
+
+        target_compile_options(${target} PRIVATE
+            -fsanitize=fuzzer,address,undefined
+            -fno-omit-frame-pointer
+            -g
+        )
+        target_link_options(${target} PRIVATE -fsanitize=fuzzer,address,undefined)
+
+        set_target_properties(${target} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
+        )
+
+        # A short deterministic smoke run, so ctest exercises the target too.
+        add_test(NAME ${target}_smoke
+            COMMAND ${target} -runs=2000 -max_len=128
+        )
+    endforeach()
 
 else()
 

@@ -148,9 +148,24 @@ ctest 有一个内置的 `WILL_FAIL` 属性，可以反转测试结果，它显�
 
 ## 模糊测试
 
-[`fuzz/fuzz_vector.c`](../../../fuzz/fuzz_vector.c) 是一个 libFuzzer 目标，仅在 `QLIB_BUILD_FUZZ=ON` 且编译器为 Clang（`-fsanitize=fuzzer`）时构建。换用其他编译器时，[`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 会发出 `WARNING`，而不是悄无声息地什么都不产出。
+共有两个 libFuzzer 模糊测试目标，二者都仅在 `QLIB_BUILD_FUZZ=ON` 且编译器为 Clang（`-fsanitize=fuzzer`）时构建。换用其他编译器时，[`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 会发出 `WARNING`，而不是悄无声息地什么都不产出。
 
-### 输入字节的含义
+| 目标 | 守卫内容 |
+|---|---|
+| [`fuzz_vector.c`](../../../fuzz/fuzz_vector.c) | 容器 API：扩容、搬移，以及元素别名路径 |
+| [`fuzz_mem.c`](../../../fuzz/fuzz_mem.c) | `ql_mem` 中的算术：填充后的尺寸、对齐取整、溢出辅助函数 |
+
+### `fuzz_mem`
+
+内存模块值得关注的面是算术而不是解析，因此载荷直接选择对齐和大小，并且每次迭代都会检查这些性质：
+
+- 非 NULL 的对齐块确实是所请求对齐的倍数，且全部 `size` 个字节都可写；如果布局越界，ASAN 会把它变成一次失败；
+- 不是 2 的幂的对齐会被直接拒绝，绝不会变成野指针；
+- `ql_size_mul_overflow()` 和 `ql_size_add_overflow()` 与它们所守卫的算术一致，已知会溢出的那些情况也仍会报告 `QL_ERR_OVERFLOW`。
+
+测试框架中有一个起关键作用的掩码。“无效对齐”分支会把 `3` 按位或进一个原始的 32 位值，因为原始值偶尔会落在真正的 2 的幂上——例如 `0x80000000`。库随后会正确地接受它，并按其所文档化的约定，尝试分配一个对齐大小的内存块：2 GiB。这个目标的第一版漏掉了这个掩码，libFuzzer 在大约 57000 次运行之后报告了 `out-of-memory`。那是测试框架的缺陷，而不是库的缺陷。
+
+### `fuzz_vector`
 
 输入是一段 vector 操作脚本，每个操作一个字节：
 
@@ -187,13 +202,13 @@ ctest 有一个内置的 `WILL_FAIL` 属性，可以反转测试结果，它显�
 在此检出上全新运行一次：
 
 ```text
-Done 6044768 runs in 46 second(s)
-stat::average_exec_per_sec:     131408
+fuzz_vector: Done 6044768 runs in 46 second(s)
+fuzz_mem:    Done 49036278 runs in 61 second(s)
 ```
 
-没有发现。注意该目标是用 `-fsanitize=fuzzer,address,undefined` 编译的，因此这些运行同时覆盖 ASAN 和 UBSAN。
+没有发现。这两个目标都用 `-fsanitize=fuzzer,address,undefined` 编译，因此这些运行同时覆盖 ASAN 和 UBSAN。
 
-当 `QLIB_BUILD_FUZZ=ON` 时，ctest 还会注册 `fuzz_vector_smoke`（`-runs=2000 -max_len=128`），好让普通的 `ctest` 运行也会执行该目标。
+当 `QLIB_BUILD_FUZZ=ON` 时，ctest 还会为每个目标注册一个 `<target>_smoke` 测试（`-runs=2000 -max_len=128`），好让普通的 `ctest` 运行也会执行它们。CI 的 `fuzz` job 会让两者各跑 120 秒。
 
 ## 变异测试
 
@@ -207,6 +222,11 @@ stat::average_exec_per_sec:     131408
 | B | `ql_calloc()`：删除 `memset(ptr, 0, total)` | 退出码 1；`39 tests run, 64 failures` |
 | C | `ql_alloc()`：删除 `QL_ERR_NOMEM` 的抛出 | 退出码 1；`39 tests run, 3 failures` |
 | D | `ql_vector_push_back`/`insert`：绕过 `ql_vector_pin_elem()` | 退出码 1；ASAN 报告 `heap-use-after-free` |
+| E | `ql_aligned_alloc()`：删除向上取整前跳过 `sizeof(void*)` 的步骤 | 退出码 1；ASAN 报告 `heap-buffer-overflow` |
+| F | `ql_aligned_alloc()`：删除 2 的幂校验 | 退出码 1；ASAN 报告 `heap-buffer-overflow` |
+| G | `ql_aligned_alloc()`：在头部保存对齐后的指针，而不是原始指针 | 退出码 1；ASAN 报告 `attempting free on address which was not malloc()-ed` |
+
+A–D 在包含 39 个测试的套件上运行，E–G 在新增了对齐分配覆盖的 47 个测试的套件上运行。这三个对齐分配变异都以内存安全失败的形式暴露出来，而不是断言失败，这正是有用的结果：即使没有断言直接针对对齐布局，ASAN 也会检查它。
 
 有两点观察值得记录：
 

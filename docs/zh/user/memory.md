@@ -104,8 +104,11 @@ ql_vector_t* make_vector(void)
 | `ql_realloc(alloc, ptr, size)` | `size == 0` 时释放 `ptr` 并返回 `NULL` |
 | `ql_alloc_array(alloc, count, size)` | `count * size`，检查溢出 |
 | `ql_realloc_array(alloc, ptr, count, size)` | 同上，用于调整大小 |
+| `ql_aligned_alloc(alloc, alignment, size)` | 超额对齐的块；用 `ql_aligned_free` 释放 |
+| `ql_aligned_free(alloc, ptr)` | 释放由 `ql_aligned_alloc` 得到的块；`NULL` 是空操作 |
 | `ql_dealloc(alloc, ptr)` | `NULL` 是空操作 |
 | `ql_size_mul_overflow(count, size, &result)` | 单独的检查函数 |
+| `ql_size_add_overflow(a, b, &result)` | 单独的加法检查 |
 
 ```c
 #include <qlib/qlib.h>
@@ -145,7 +148,55 @@ if (ql_size_mul_overflow(count, elem_size, &total) != QL_OK) {
 乘积溢出时返回 `QL_ERR_OVERFLOW`。失败时 `result` 保持不变。`count` 为 0 永远
 不会溢出。
 
-请使用数组辅助函数，而不要自己计算乘积；这是项目的贡献规则之一。
+`ql_size_add_overflow()` 是同样的检查，用于加法；在计算带填充或带帧头的大小时很
+有用：
+
+```c
+size_t total = 0;
+if (ql_size_add_overflow(payload, header, &total) != QL_OK) {
+    /* payload + header 无法用 size_t 表示 */
+}
+```
+
+请使用这些辅助函数，而不要自己计算算术；这是项目的贡献规则之一。
+
+## 对齐分配
+
+`ql_aligned_alloc()` 返回按调用方选定的 2 的幂对齐的内存，适用于 SIMD 缓冲区、
+按缓存行分隔、DMA 或按页对齐的 I/O。
+
+```c
+#include <qlib/qlib.h>
+
+/* 按 64 字节对齐，共 4096 字节；用 ql_aligned_free 释放，而不是 ql_dealloc。 */
+void* buf = ql_aligned_alloc(NULL, 64, 4096);
+if (buf == NULL) {
+    /* 对齐字节数无效、溢出，或内存不足 */
+}
+/* ... 使用 buf ... */
+ql_aligned_free(NULL, buf);
+```
+
+| 参数 | 规则 |
+|---|---|
+| `alignment` | 非零的 2 的幂。其他任何值都会得到 `QL_ERR_INVALID_ARG` |
+| `size` | 字节数。与 C11 的 `aligned_alloc` 不同，它**不**要求是对齐字节数的整数倍 |
+
+需要遵守的规则：
+
+- **用 `ql_aligned_free()` 释放。** 你拿到的指针并不是分配器返回的那个指针，因此
+  对它使用 `ql_dealloc()`、`ql_realloc()` 或 libc `free()` 都是错的。
+- 向 `ql_aligned_free()` 传入与分配时相同的分配器。
+- 没有对齐版的 realloc。要扩容，就分配一个新块、复制，然后释放旧块。
+
+该块是从分配器自己的 `malloc` 中划出来的，而不是来自平台的对齐分配器。
+`ql_aligned_alloc()` 申请 `size + alignment + sizeof(void*)` 字节，把地址向上取整，
+并把原始指针存放在返回地址紧前面的那些字节里。因此自定义分配器始终掌控着自己的
+内存，代价就是那笔每次分配的开销。较大的对齐字节数因此代价按比例更高：1 MiB 的
+对齐字节数下，无论 `size` 是多少，每次分配都会浪费约 1 MiB。
+
+因为返回的指针是 `alignment` 的整数倍，所以对于任何对齐字节数不超过它的类型，它
+也是适当对齐的。
 
 ## 失败上报
 
@@ -158,6 +209,7 @@ if (ql_size_mul_overflow(count, elem_size, &total) != QL_OK) {
 | 对象 | 由谁释放 |
 |---|---|
 | 来自 `ql_alloc`/`ql_calloc`/`ql_alloc_array`/`ql_realloc*` 的内存 | 你，用 `ql_dealloc`，并使用同一个分配器 |
+| 来自 `ql_aligned_alloc` 的内存 | 你，用 `ql_aligned_free`，并使用同一个分配器 |
 | 来自 `ql_vector_create` 的容器 | 你，用 `ql_vector_destroy`，它会释放缓冲区和控制块 |
 | 来自 `ql_vector_at`/`ql_vector_data` 的指针 | 不需要任何人；它们指向容器的缓冲区，并会因修改操作而失效 |
 | 你传入的分配器结构体 | 你；qlib 会复制它，从不保存你的指针 |

@@ -108,6 +108,26 @@ The C11 standard defines an optional bounds-checked library, Annex K, providing 
 
 Annex K is optional, and glibc and macOS libc do not provide it. Adopting `memcpy_s` in `src/ql_vector.c` would break two of the three platforms CI supports, and there is no portable shim that would not just reimplement the check. The plain `memcpy`, `memmove` and `memset` calls in `ql_vector.c`, `ql_mem.c` and the minunit harness are therefore the intended tools.
 
+## Aligned allocation without a platform branch
+
+Over-aligned allocation is the one place where the obvious implementation is
+platform-specific: C11 `aligned_alloc`, POSIX `posix_memalign` and MSVC
+`_aligned_malloc`/`_aligned_free` each exist on a subset of the supported
+platforms, and the MSVC pair even takes its arguments in the opposite order.
+
+None of them is used. `ql_aligned_alloc()` takes `alignment + sizeof(void*)`
+bytes of slack from the allocator's own `malloc`, rounds the address up, and
+stores the original pointer immediately before the aligned block; `ql_aligned_free()`
+reads that header back. The result is a single code path that compiles
+identically everywhere, needs no `#if defined(_WIN32)`, and — because the
+allocation still comes from the caller's allocator — keeps the rule that all
+memory goes through `ql_allocator_t`.
+
+The trade-offs are recorded in ADR-13 of [design decisions](design-decisions.md).
+The portability-relevant part is that this file contains no aligned-allocation
+platform guard to test, which is why the support matrix above has no per-platform
+caveat for it.
+
 ## Why `ql_lock_t` was removed
 
 An earlier revision declared a lock adapter (`ql_lock_t`, `ql_lock_fn`, `ql_unlock_fn`) in `ql_common.h`. It was deleted rather than implemented, for a portability reason among others:

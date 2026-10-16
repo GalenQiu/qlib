@@ -1,6 +1,14 @@
 #ifndef QLIB_QL_COMMON_H
 #define QLIB_QL_COMMON_H
 
+/**
+ * @file ql_common.h
+ * @brief Version macros, the ql_ret_t error codes, ql_strerror(), and the
+ *        optional error handler.
+ *
+ * This module depends on nothing but the C library.
+ */
+
 #include <stddef.h>
 
 #include "qlib/qlib_export.h"
@@ -14,9 +22,13 @@ extern "C"
  * Version
  * ------------------------------------------------------------------------ */
 
+/** @brief Major component of the version of these headers. */
 #define QLIB_VERSION_MAJOR 0
+/** @brief Minor component of the version of these headers. */
 #define QLIB_VERSION_MINOR 1
+/** @brief Patch component of the version of these headers. */
 #define QLIB_VERSION_PATCH 0
+/** @brief Version string of these headers, e.g. "0.1.0". Compare with ql_version(). */
 #define QLIB_VERSION_STRING "0.1.0"
 
 /**
