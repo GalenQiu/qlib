@@ -247,19 +247,38 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+## 基准测试
+
+`bench/` 存放微基准测试套件，仅在 `QLIB_BUILD_BENCH=ON` 时构建，且从不安装。没有外部框架：qlib 没有任何依赖，而一个引入依赖的基准测试会成为整棵源码树中唯一这样做的东西。
+
+一个用例声明操作次数、可选的**不计时**准备、计时的区间，以及可选的收尾。这种拆分很关键：如果 `reserve()` 位于计时的区间内，对 `push_back` 的测量就会掩盖这个基准测试本要展示的差异。
+
+每个用例还会通过 `QL_BENCH_CHECK` 检查它即将为之报告数字的那个结果。对有问题的代码做基准测试会得出一个谁都不该据以行动的数字，因此这些检查是硬失败。`QL_BENCH_CHECK` 是宏而不是函数，这样 clang-tidy 就能看出它在失败时控制流不会继续；如果藏在函数调用之后，分析器恰恰会在那行本应由该检查保证安全的代码上报告空指针解引用。
+
+```bash
+cmake -S . -B build -DQLIB_BUILD_BENCH=ON
+cmake --build build
+./build/bin/qlib_bench                 # 全部
+./build/bin/qlib_bench vector          # 子串过滤
+./build/bin/qlib_bench --list
+./build/bin/qlib_bench --quick         # 极小的迭代次数
+```
+
+`qlib_bench_smoke` 在 ctest 下以 `--quick` 运行该套件，因此每次运行都会构建并执行基准测试。它不对计时作任何断言——计时取决于机器——只断言这些用例仍会运行，并且仍能通过它们自己的正确性检查。这个冒烟测试立刻就证明了它的价值：第一版基准测试在只给出 `--quick` 时根本没有选中任何用例，因为“无过滤器”的条件写成了 `argc <= 1`。
+
 ## CI 任务
 
-定义在 [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml)。每个构建 job 都会传 `-DQLIB_WERROR=ON`，并全局设置 `CTEST_OUTPUT_ON_FAILURE=1`，以便失败的测试打印其输出。
+定义在 [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml)。每个编译本库的 job 都会传 `-DQLIB_WERROR=ON`，并全局设置 `CTEST_OUTPUT_ON_FAILURE=1`，以便失败的测试打印其输出。所有第三方工具都固定版本，因为它们每一个都可能在不同发行版之间改变输出，而“不新增警告”的底线只有针对固定版本才有意义。
 
 | 任务 | 运行器 | 配置 | 它守卫什么 |
 |---|---|---|---|
-| `linux` | `ubuntu-24.04`，矩阵 `gcc` / `clang` | `-DQLIB_WERROR=ON` | 两个 Linux 编译器都无警告地构建并通过测试套件 |
+| `linux` | `ubuntu-24.04`，矩阵 `gcc` / `clang` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON` | 两个 Linux 编译器都无警告地构建并通过测试套件，且基准测试会经 `qlib_bench_smoke` 编译并冒烟运行 |
 | `macos` | `macos-latest` | `-DQLIB_WERROR=ON` | AppleClang 构建并通过——第三个声称支持的平台 |
-| `windows` | `windows-latest`，矩阵 `shared` 取 `OFF`/`ON` | `-DQLIB_WERROR=ON -DQLIB_SHARED=...` | MSVC 构建；只有 `ON` 这一变体才真正走通 `QLIB_EXPORT`、`__declspec(dllexport)` 和 `QLIB_STATIC_DEFINE` |
+| `windows` | `windows-latest`，矩阵 `shared` 取 `OFF`/`ON` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_SHARED=...` | MSVC 构建；只有 `ON` 这一变体才真正走通 `QLIB_EXPORT`、`__declspec(dllexport)` 和 `QLIB_STATIC_DEFINE`，并且 `QLIB_BUILD_BENCH` 是唯一会编译 `QueryPerformanceCounter` 计时路径的配置 |
 | `sanitizers` | `ubuntu-24.04`，clang | `-DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug` | 单元测试套件中没有内存错误或未定义行为 |
 | `fuzz` | `ubuntu-24.04`，clang | `-DQLIB_BUILD_FUZZ=ON`，随后 `-max_total_time=120 -max_len=256` | 任意操作序列下的内存安全与不变量；失败时把 `crash-*` 作为 `fuzz-crash` 工件上传 |
 | `package` | `ubuntu-24.04` | 安装到某个前缀，然后构建两个使用方 | `find_package(qlib 0.1 REQUIRED)` 和 `pkg-config` 都能解析并链接 |
-| `docs` | `ubuntu-24.04` | `python3 ci/check_links.py`，随后 `-DQLIB_BUILD_DOCS=ON` 和 `--target docs` | Markdown 中的每个相对链接都能解析，并且 `Doxyfile.in` 仍能解析、仍能生成 `docs/html/index.html`；参考文档作为 `api-reference` 工件上传 |
+| `docs` | `ubuntu-24.04` | 来自上游发布 tarball 的 Doxygen 1.18.0；`python3 ci/check_links.py`，随后 `-DQLIB_BUILD_DOCS=ON` 和 `--target docs` | Markdown 中的每个相对链接都能解析；参考文档能构建且 `docs/html/index.html` 存在；**并且 Doxygen 完全不产生警告**。参考文档作为 `api-reference` 工件上传 |
 | `format` | `ubuntu-24.04` | `pip install clang-format==23.1.1` | 对 `git ls-files '*.c' '*.h'` 得到的每个文件做格式检查，版本被固定，因为不同发行版输出不同 |
 | `tidy` | `ubuntu-24.04` | 来自 LLVM apt 仓库的 clang-tidy 23 | 通过 `-p build` 对 `src/*.c` 和 `tests/*.c` 做静态分析；`WarningsAsErrors: '*'` 使任何发现都是致命的 |
 

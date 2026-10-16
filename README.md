@@ -24,8 +24,8 @@ Cross platform: Linux / macOS / Windows, MIT license.
 
 ## Documentation
 
-The full documentation lives in [`docs/`](docs/README.md), in English with a
-[Simplified Chinese translation](docs/zh/README.md):
+The full documentation lives in [`docs/`](docs/index.md), in English with a
+[Simplified Chinese translation](docs/zh/index.md):
 
 - **User guide** — [getting started](docs/user/getting-started.md),
   [integration](docs/user/integration.md),
@@ -66,7 +66,7 @@ cmake --build . --config Debug
 
 - `QLIB_BUILD_TESTS=ON` build unit tests (ON by default only when qlib is the
   top level project, so `add_subdirectory()` consumers get just the library)
-- `QLIB_BUILD_BENCH=OFF` build benchmark (not implemented yet)
+- `QLIB_BUILD_BENCH=OFF` build the micro-benchmark suite (`bin/qlib_bench`)
 - `QLIB_BUILD_FUZZ=OFF` build libFuzzer targets; requires Clang, and with any
   other compiler the option warns instead of silently doing nothing
 - `QLIB_BUILD_NET=OFF` build network module (not implemented yet)

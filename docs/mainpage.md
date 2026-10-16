@@ -44,7 +44,7 @@ Technical documentation:
 - [Testing](technical/testing.md)
 
 All of the above are also available in Simplified Chinese under
-[`zh/`](zh/README.md) (中文文档).
+[`zh/`](zh/index.md) (中文文档).
 
 ## A first program
 

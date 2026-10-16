@@ -89,7 +89,7 @@ cmake -S . -B build -DQLIB_BUILD_DOCS=ON
 cmake --build build --target docs
 ```
 
-之后打开 `docs/html/index.html`。手动运行 Doxygen 的方式见[文档索引](../README.md)。
+之后打开 `docs/html/index.html`。手动运行 Doxygen 的方式见[文档索引](../index.md)。
 
 ## 第一个程序
 

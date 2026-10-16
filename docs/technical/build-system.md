@@ -7,6 +7,7 @@
 | [`CMakeLists.txt`](../../CMakeLists.txt) | Root project: options, sanitizers, warning target, library target, subdirectories, install/export rules |
 | [`tests/CMakeLists.txt`](../../tests/CMakeLists.txt) | The `qlib_test` executable and the `qlib_harness_selftest` probe |
 | [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) | The `fuzz_vector` and `fuzz_mem` libFuzzer targets |
+| [`bench/CMakeLists.txt`](../../bench/CMakeLists.txt) | The `qlib_bench` micro-benchmark suite |
 | [`cmake/qlibConfig.cmake.in`](../../cmake/qlibConfig.cmake.in) | Package config template for `find_package(qlib)` |
 | [`cmake/qlib.pc.in`](../../cmake/qlib.pc.in) | pkg-config template |
 | [`cmake/cmake_uninstall.cmake.in`](../../cmake/cmake_uninstall.cmake.in) | Script run by the `uninstall` target |
@@ -36,6 +37,7 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 | `qlib_test` | executable | `tests/` | `qlib::qlib`, `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `qlib_harness_selftest` | executable | `tests/` | `qlib_warnings` only | `${PROJECT_BINARY_DIR}/bin` |
 | `fuzz_vector`, `fuzz_mem` | executables | `fuzz/` | `qlib::qlib`, `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
+| `qlib_bench` | executable | `bench/` | `qlib::qlib`, `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `docs` | custom target | root, when `QLIB_BUILD_DOCS=ON` | — | `docs/html` |
 
 `docs` is a custom target, not linked into anything: it is built explicitly with `cmake --build build --target docs`. It requires Doxygen, and optionally uses Graphviz when the `dot` component is found.
@@ -49,13 +51,14 @@ Registered tests:
 | `qlib_common_test` | `qlib_test` | `tests/CMakeLists.txt` |
 | `qlib_harness_selftest` | `${CMAKE_COMMAND} -DPROBE=$<TARGET_FILE:qlib_harness_selftest> -P tests/selftest/expect_failure.cmake` | `tests/CMakeLists.txt` |
 | `fuzz_vector_smoke`, `fuzz_mem_smoke` | `<target> -runs=2000 -max_len=128` | `fuzz/CMakeLists.txt`, one per target, only when they exist |
+| `qlib_bench_smoke` | `qlib_bench --quick` | `bench/CMakeLists.txt`, only when the target exists |
 
 ## Cache options
 
 | Option | Default | Effect |
 |---|---|---|
 | `QLIB_BUILD_TESTS` | `ON` if top level, else `OFF` | Adds the `tests/` subdirectory and calls `enable_testing()` |
-| `QLIB_BUILD_BENCH` | `OFF` | Nothing yet; emits a `WARNING` that no benchmarks exist |
+| `QLIB_BUILD_BENCH` | `OFF` | Adds the `bench/` subdirectory, building the `qlib_bench` executable |
 | `QLIB_BUILD_FUZZ` | `OFF` | Adds the `fuzz/` subdirectory. Requires Clang; otherwise a `WARNING` |
 | `QLIB_BUILD_NET` | `OFF` | Nothing yet; emits a `WARNING` that the module is unimplemented |
 | `QLIB_SHARED` | `OFF` | `add_library(qlib SHARED ...)` instead of `STATIC` |
@@ -208,16 +211,18 @@ The sequence below is what `ql_vector` did, and it is the checklist for the next
 7. **Run the suite** from [`tests/test_main.c`](../../tests/test_main.c): add `MU_RUN_SUITE(test_suite_foo);` before `MU_REPORT()`.
 8. **Add the test source** to the `add_executable(qlib_test ...)` list in [`tests/CMakeLists.txt`](../../tests/CMakeLists.txt).
 9. **Add a fuzz target** if the module parses or transforms input: `fuzz/fuzz_foo.c` with `int LLVMFuzzerTestOneInput(const uint8_t*, size_t)`, forward-declared so `-Wmissing-prototypes` stays quiet, plus an `add_executable` block and an optional `add_test` smoke run in [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt).
-10. **Verify before committing**:
+10. **Add benchmark cases** for anything whose cost a user might ask about: a `ql_bench_case` entry in [`bench/`](../../bench/CMakeLists.txt), with the correctness of the measured result asserted through `QL_BENCH_CHECK`. Put untimed work in the `setup` hook so it is not charged to the operation being measured.
+11. **Verify before committing**:
 
 ```bash
-cmake -S . -B build -DQLIB_WERROR=ON
+cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
+./build/bin/qlib_bench
 
-clang-format -i src/*.c include/qlib/*.h tests/*.c tests/*.h
+clang-format -i src/*.c include/qlib/*.h tests/*.c tests/*.h bench/*.c bench/*.h
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-clang-tidy src/*.c tests/*.c -p build
+clang-tidy src/*.c tests/*.c bench/*.c -p build
 ```
 
 The same steps are enforced by the `format`, `tidy`, `linux`, `macos`, `windows`, `sanitizers`, `fuzz`, `docs` and `package` jobs in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml); see [testing](testing.md) for what each job guards.

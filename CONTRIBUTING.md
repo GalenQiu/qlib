@@ -53,6 +53,10 @@ ctest --test-dir build --output-on-failure
 ```
 - `qlib_harness_selftest` contains an assertion that is *supposed* to fail: it
   proves a failing test actually fails the run. Do not "fix" it.
+- Every module whose cost a user might reasonably ask about should get a case
+  in `bench/`, registered in the suite for that module. A benchmark must check
+  the result it measures with `QL_BENCH_CHECK`; timing broken code is worse than
+  not timing it.
 - Every module that parses or transforms input should get a libFuzzer target
   under `fuzz/`, registered in `fuzz/CMakeLists.txt`:
 ```bash

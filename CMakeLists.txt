@@ -164,12 +164,13 @@ if(QLIB_BUILD_FUZZ)
     add_subdirectory(fuzz)
 endif()
 
-# Placeholder modules. These announce themselves rather than silently doing
-# nothing, which is what a bare `option()` plus empty `if()` used to do.
+# Benchmarks
 if(QLIB_BUILD_BENCH)
-    message(WARNING "qlib: QLIB_BUILD_BENCH=ON but no benchmarks are implemented yet; nothing will be built.")
+    add_subdirectory(bench)
 endif()
 
+# Placeholder module. It announces itself rather than silently doing nothing,
+# which is what a bare `option()` plus empty `if()` used to do.
 if(QLIB_BUILD_NET)
     message(WARNING "qlib: QLIB_BUILD_NET=ON but the network module is not implemented yet; nothing will be built.")
 endif()

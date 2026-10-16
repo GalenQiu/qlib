@@ -1,0 +1,9 @@
+---
+# Inherits the repository-wide rules.
+#
+# cert-err33-c is disabled here: a benchmark's stdout is diagnostic output, and
+# a failed printf is not a condition the benchmark can act on. The check keeps
+# its value in src/, where an unchecked return is a real defect.
+InheritParentConfig: true
+Checks: '-cert-err33-c'
+...

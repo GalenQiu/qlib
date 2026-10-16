@@ -7,6 +7,7 @@
 | [`CMakeLists.txt`](../../../CMakeLists.txt) | 根项目：选项、sanitizer、警告目标、库目标、子目录、安装/导出规则 |
 | [`tests/CMakeLists.txt`](../../../tests/CMakeLists.txt) | `qlib_test` 可执行文件与 `qlib_harness_selftest` 探针 |
 | [`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) | `fuzz_vector` 和 `fuzz_mem` libFuzzer 目标 |
+| [`bench/CMakeLists.txt`](../../../bench/CMakeLists.txt) | `qlib_bench` 微基准测试套件 |
 | [`cmake/qlibConfig.cmake.in`](../../../cmake/qlibConfig.cmake.in) | 供 `find_package(qlib)` 使用的包配置模板 |
 | [`cmake/qlib.pc.in`](../../../cmake/qlib.pc.in) | pkg-config 模板 |
 | [`cmake/cmake_uninstall.cmake.in`](../../../cmake/cmake_uninstall.cmake.in) | 由 `uninstall` 目标运行的脚本 |
@@ -36,6 +37,7 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 | `qlib_test` | 可执行文件 | `tests/` | `qlib::qlib`、`qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `qlib_harness_selftest` | 可执行文件 | `tests/` | 仅 `qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `fuzz_vector`、`fuzz_mem` | 可执行文件 | `fuzz/` | `qlib::qlib`、`qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
+| `qlib_bench` | 可执行文件 | `bench/` | `qlib::qlib`、`qlib_warnings` | `${PROJECT_BINARY_DIR}/bin` |
 | `docs` | 自定义目标 | 根，当 `QLIB_BUILD_DOCS=ON` 时 | — | `docs/html` |
 
 `docs` 是自定义目标，不会被链接进任何东西：它需要用 `cmake --build build --target docs` 显式构建。它需要 Doxygen，并在找到 `dot` 组件时可选地使用 Graphviz。
@@ -49,13 +51,14 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 | `qlib_common_test` | `qlib_test` | `tests/CMakeLists.txt` |
 | `qlib_harness_selftest` | `${CMAKE_COMMAND} -DPROBE=$<TARGET_FILE:qlib_harness_selftest> -P tests/selftest/expect_failure.cmake` | `tests/CMakeLists.txt` |
 | `fuzz_vector_smoke`、`fuzz_mem_smoke` | `<target> -runs=2000 -max_len=128` | `fuzz/CMakeLists.txt`，每个目标一个，仅当它们存在时 |
+| `qlib_bench_smoke` | `qlib_bench --quick` | `bench/CMakeLists.txt`，仅当该目标存在时 |
 
 ## 缓存选项
 
 | 选项 | 默认值 | 效果 |
 |---|---|---|
 | `QLIB_BUILD_TESTS` | 顶层时为 `ON`，否则为 `OFF` | 添加 `tests/` 子目录并调用 `enable_testing()` |
-| `QLIB_BUILD_BENCH` | `OFF` | 暂无内容；发出 `WARNING`，说明不存在基准测试 |
+| `QLIB_BUILD_BENCH` | `OFF` | 添加 `bench/` 子目录，构建 `qlib_bench` 可执行文件 |
 | `QLIB_BUILD_FUZZ` | `OFF` | 添加 `fuzz/` 子目录。需要 Clang；否则产生 `WARNING` |
 | `QLIB_BUILD_NET` | `OFF` | 暂无内容；发出 `WARNING`，说明该模块尚未实现 |
 | `QLIB_SHARED` | `OFF` | 使用 `add_library(qlib SHARED ...)` 而非 `STATIC` |
@@ -208,16 +211,18 @@ endif()
 7. **运行测试套件**于 [`tests/test_main.c`](../../../tests/test_main.c)：在 `MU_REPORT()` 之前添加 `MU_RUN_SUITE(test_suite_foo);`。
 8. **加入测试源文件**到 [`tests/CMakeLists.txt`](../../../tests/CMakeLists.txt) 中的 `add_executable(qlib_test ...)` 列表。
 9. **添加模糊测试目标**，前提是该模块会解析或转换输入：`fuzz/fuzz_foo.c`，其中包含 `int LLVMFuzzerTestOneInput(const uint8_t*, size_t)` 并做前置声明，以便 `-Wmissing-prototypes` 保持安静，再在 [`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 中加一个 `add_executable` 块和一个可选的 `add_test` 冒烟运行。
-10. **提交前验证**：
+10. **添加基准测试用例**，针对任何用户可能询问其开销的东西：在 [`bench/`](../../../bench/CMakeLists.txt) 中加一个 `ql_bench_case` 条目，并通过 `QL_BENCH_CHECK` 断言所测量结果的正确性。把不计时的工作放进 `setup` 钩子，这样它就不会被算进所测量的那个操作。
+11. **提交前验证**：
 
 ```bash
-cmake -S . -B build -DQLIB_WERROR=ON
+cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
+./build/bin/qlib_bench
 
-clang-format -i src/*.c include/qlib/*.h tests/*.c tests/*.h
+clang-format -i src/*.c include/qlib/*.h tests/*.c tests/*.h bench/*.c bench/*.h
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-clang-tidy src/*.c tests/*.c -p build
+clang-tidy src/*.c tests/*.c bench/*.c -p build
 ```
 
 同样的步骤由 [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) 中的 `format`、`tidy`、`linux`、`macos`、`windows`、`sanitizers`、`fuzz`、`docs` 和 `package` job 强制执行；每个 job 守卫什么，见[测试](testing.md)。

@@ -247,19 +247,53 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+## Benchmarking
+
+`bench/` holds a micro-benchmark suite, built only when `QLIB_BUILD_BENCH=ON`
+and never installed. There is no external framework: qlib has no dependencies,
+and a benchmark that pulled one in would be the only thing in the tree that did.
+
+A case declares an operation count, an optional **untimed** setup, the timed
+region, and an optional teardown. The split matters: measuring `push_back` with
+the `reserve()` inside the timed region would hide the very difference the
+benchmark exists to show.
+
+Every case also checks the result it is about to report a number for, through
+`QL_BENCH_CHECK`. A benchmark of broken code produces a figure nobody should act
+on, so these are hard failures. `QL_BENCH_CHECK` is a macro rather than a
+function so that clang-tidy can see that control does not continue when it
+fails; behind a function call the analyser reports a null dereference on exactly
+the line the check was there to make safe.
+
+```bash
+cmake -S . -B build -DQLIB_BUILD_BENCH=ON
+cmake --build build
+./build/bin/qlib_bench                 # everything
+./build/bin/qlib_bench vector          # substring filter
+./build/bin/qlib_bench --list
+./build/bin/qlib_bench --quick         # tiny iteration counts
+```
+
+`qlib_bench_smoke` runs the suite with `--quick` under ctest, so the benchmark is
+built and executed on every run. It asserts nothing about the timings — those are
+machine-dependent — only that the cases still run and still pass their own
+correctness checks. That smoke test earned its place immediately: the first
+version selected no cases at all when given only `--quick`, because the "no
+filter" condition was `argc <= 1`.
+
 ## CI jobs
 
-Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Every build job passes `-DQLIB_WERROR=ON`, and `CTEST_OUTPUT_ON_FAILURE=1` is set globally so a failing test prints its output.
+Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Every job that compiles the library passes `-DQLIB_WERROR=ON`, and `CTEST_OUTPUT_ON_FAILURE=1` is set globally so a failing test prints its output. Every third-party tool is pinned, because each of them can change its output between releases and a floor on "no new warnings" is only meaningful against a fixed version.
 
 | Job | Runner | Configuration | What it guards |
 |---|---|---|---|
-| `linux` | `ubuntu-24.04`, matrix `gcc` / `clang` | `-DQLIB_WERROR=ON` | Both Linux compilers build warning-free and pass the suite |
+| `linux` | `ubuntu-24.04`, matrix `gcc` / `clang` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON` | Both Linux compilers build warning-free and pass the suite, and the benchmark is compiled and smoke-run through `qlib_bench_smoke` |
 | `macos` | `macos-latest` | `-DQLIB_WERROR=ON` | AppleClang builds and passes — the third claimed platform |
-| `windows` | `windows-latest`, matrix `shared` `OFF`/`ON` | `-DQLIB_WERROR=ON -DQLIB_SHARED=...` | MSVC builds; the `ON` variant is the only place `QLIB_EXPORT`, `__declspec(dllexport)` and `QLIB_STATIC_DEFINE` are exercised for real |
+| `windows` | `windows-latest`, matrix `shared` `OFF`/`ON` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_SHARED=...` | MSVC builds; the `ON` variant is the only place `QLIB_EXPORT`, `__declspec(dllexport)` and `QLIB_STATIC_DEFINE` are exercised for real, and `QLIB_BUILD_BENCH` is the only thing that compiles the `QueryPerformanceCounter` timer path |
 | `sanitizers` | `ubuntu-24.04`, clang | `-DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug` | No memory errors or undefined behaviour in the unit suite |
 | `fuzz` | `ubuntu-24.04`, clang | `-DQLIB_BUILD_FUZZ=ON`, then `-max_total_time=120 -max_len=256` | Memory safety and invariants under arbitrary operation sequences; uploads `crash-*` as the `fuzz-crash` artifact on failure |
 | `package` | `ubuntu-24.04` | install to a prefix, then build two consumers | `find_package(qlib 0.1 REQUIRED)` and `pkg-config` both resolve and link |
-| `docs` | `ubuntu-24.04` | `python3 ci/check_links.py`, then `-DQLIB_BUILD_DOCS=ON` and `--target docs` | Every relative link in the Markdown resolves, and `Doxyfile.in` still parses and still produces `docs/html/index.html`; the reference is uploaded as the `api-reference` artifact |
+| `docs` | `ubuntu-24.04` | Doxygen 1.18.0 from the upstream release tarball; `python3 ci/check_links.py`, then `-DQLIB_BUILD_DOCS=ON` and `--target docs` | Every relative link in the Markdown resolves; the reference builds and `docs/html/index.html` exists; **and Doxygen produces no warnings at all**. The reference is uploaded as the `api-reference` artifact |
 | `format` | `ubuntu-24.04` | `pip install clang-format==23.1.1` | Formatting of every file from `git ls-files '*.c' '*.h'`, with the version pinned because output differs between releases |
 | `tidy` | `ubuntu-24.04` | clang-tidy 23 from LLVM's apt repository | Static analysis of `src/*.c` and `tests/*.c` via `-p build`; `WarningsAsErrors: '*'` makes any finding fatal |
 

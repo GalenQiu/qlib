@@ -94,7 +94,7 @@ cmake -S . -B build -DQLIB_BUILD_DOCS=ON
 cmake --build build --target docs
 ```
 
-Open `docs/html/index.html` afterwards. See [the docs index](../README.md) for
+Open `docs/html/index.html` afterwards. See [the docs index](../index.md) for
 the manual Doxygen route.
 
 ## A first program

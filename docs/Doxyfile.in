@@ -3,7 +3,7 @@
 # This is a curated configuration, not the full file `doxygen -g` produces:
 # only the settings that actually differ from the defaults are listed. CMake
 # fills in the at-sign placeholders and runs Doxygen; see QLIB_BUILD_DOCS in the
-# top level CMakeLists.txt. docs/README.md documents the manual route.
+# top level CMakeLists.txt. docs/index.md documents the manual route.
 #
 # NOTE: never write an at-sign-delimited token in these comments. CMake's
 # configure_file(@ONLY) substitutes every one it finds, comments included, and
@@ -25,19 +25,32 @@ OUTPUT_DIRECTORY       = @PROJECT_SOURCE_DIR@/docs
 # Markdown pages. src/ is deliberately NOT an input: struct ql_vector and the
 # static helpers are implementation details, and documenting them would both
 # clutter the reference and publish a layout the ABI policy says callers must
-# not depend on. CONTRIBUTING.md is included so the many links to it from the
-# technical pages resolve.
+# not depend on. The root README.md and CONTRIBUTING.md are inputs because the
+# technical pages link to them.
+#
+# The whole source tree is the input rather than a list of paths, with the
+# unwanted directories excluded below.
+#
+# README.md is excluded even though CONTRIBUTING.md is not. Doxygen gives a file
+# called README.md special treatment, and a link to it from Markdown resolves to
+# nothing: it reports "unable to resolve reference to '.../README.md'" and, when
+# the tool runs from anywhere but the source tree, also "No matching directory
+# found for command \dir". The root README is a host-facing document anyway;
+# docs/mainpage.md is the landing page of this reference.
 # ---------------------------------------------------------------------------
-INPUT                  = @PROJECT_SOURCE_DIR@/include \
-                         @PROJECT_SOURCE_DIR@/docs \
-                         @PROJECT_SOURCE_DIR@/README.md \
-                         @PROJECT_SOURCE_DIR@/CONTRIBUTING.md
+INPUT                  = @PROJECT_SOURCE_DIR@
 RECURSIVE              = YES
 FILE_PATTERNS          = *.c *.h *.md
 USE_MDFILE_AS_MAINPAGE = @PROJECT_SOURCE_DIR@/docs/mainpage.md
 
-# Keep generated output, build trees and test scaffolding out of the scan.
-EXCLUDE_PATTERNS       = */docs/html/* */docs/latex/* */build*/* */tests/* */fuzz/*
+# Sources, tests, fuzzers and benchmarks are not part of the API reference;
+# generated output and build trees must never be scanned.
+EXCLUDE                = @PROJECT_SOURCE_DIR@/src \
+                         @PROJECT_SOURCE_DIR@/README.md \
+                         @PROJECT_SOURCE_DIR@/tests \
+                         @PROJECT_SOURCE_DIR@/fuzz \
+                         @PROJECT_SOURCE_DIR@/bench
+EXCLUDE_PATTERNS       = */docs/html/* */docs/latex/* */build*/* */ci/*
 
 # ---------------------------------------------------------------------------
 # Extraction

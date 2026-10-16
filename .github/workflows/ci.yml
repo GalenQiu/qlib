@@ -28,10 +28,12 @@ jobs:
         if: matrix.compiler == 'clang'
         run: sudo apt-get update && sudo apt-get install -y clang
 
+      # QLIB_BUILD_BENCH also gets the benchmark compiled and, through
+      # qlib_bench_smoke, executed here.
       - name: Configure
         env:
           CC: ${{ matrix.compiler }}
-        run: cmake -S . -B build -DQLIB_WERROR=ON
+        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON
 
       - name: Build
         run: cmake --build build --parallel
@@ -71,8 +73,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # QLIB_BUILD_BENCH is the only thing that compiles the
+      # QueryPerformanceCounter timer path.
       - name: Configure
-        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_SHARED=${{ matrix.shared }}
+        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_SHARED=${{ matrix.shared }}
 
       - name: Build
         run: cmake --build build --config Debug --parallel
@@ -147,11 +151,18 @@ jobs:
   # ---------------------------------------------------------------------------
   # Documentation. Building it in CI is what keeps Doxyfile.in honest: a typo
   # or a stale input path fails here rather than silently producing a partial
-  # reference for a release.
+  # reference for a release. Warnings are fatal, so the reference has to be
+  # clean rather than merely present.
   # ---------------------------------------------------------------------------
   docs:
     name: docs / doxygen
     runs-on: ubuntu-24.04
+    env:
+      # Pinned, like clang-format and clang-tidy. The Doxyfile is warning-clean
+      # against exactly this release, and warning output does drift between
+      # Doxygen versions, so checking against the runner's older build would
+      # make a red job mean "different Doxygen" rather than "bad docs".
+      QLIB_DOXYGEN_VERSION: "1.18.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -160,8 +171,20 @@ jobs:
       - name: Check documentation links
         run: python3 ci/check_links.py
 
-      - name: Install doxygen
-        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
+      - name: Install Doxygen ${{ env.QLIB_DOXYGEN_VERSION }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/doxygen/doxygen/releases/download/Release_1_18_0/doxygen-${QLIB_DOXYGEN_VERSION}.linux.bin.tar.gz"
+          curl -fsSL -o /tmp/doxygen.tar.gz "$url"
+          tar -xzf /tmp/doxygen.tar.gz -C /tmp
+          echo "/tmp/doxygen-${QLIB_DOXYGEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      # Fails loudly and immediately if the tarball layout ever changes.
+      - name: Report the Doxygen version
+        run: doxygen --version
+
+      - name: Install graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
 
       - name: Configure
         run: cmake -S . -B build -DQLIB_BUILD_DOCS=ON -DQLIB_BUILD_TESTS=OFF
@@ -169,18 +192,16 @@ jobs:
       - name: Build the API reference
         run: cmake --build build --target docs 2>&1 | tee build/doxygen.log
 
-      - name: Check the output
+      - name: Fail on any Doxygen warning
         run: |
           test -f docs/html/index.html
           echo "docs/html/index.html generated"
-          # The Doxyfile is warning-clean against the release the author
-          # verified (1.18.0). The runner image ships an older Doxygen, so a
-          # warning is reported as an annotation rather than failing the build:
-          # version skew is not by itself a defect in the documentation.
           if grep -q "warning:" build/doxygen.log; then
-            echo "::warning::Doxygen reported warnings"
+            echo "Doxygen reported $(grep -c 'warning:' build/doxygen.log) warning(s):"
             grep "warning:" build/doxygen.log
+            exit 1
           fi
+          echo "no Doxygen warnings"
 
       - name: Upload the reference
         uses: actions/upload-artifact@v4

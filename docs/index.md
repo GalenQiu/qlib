@@ -13,7 +13,7 @@ reference.
 ## Languages
 
 These pages are written in English. A Simplified Chinese translation of every
-page lives under [`zh/`](zh/README.md); the two sets mirror each other file for
+page lives under [`zh/`](zh/index.md); the two sets mirror each other file for
 file, and both are included in the generated Doxygen reference.
 
 When changing a page, update its counterpart under `zh/` in the same change, or
@@ -77,16 +77,15 @@ doxygen Doxyfile
 - Every function that returns `ql_ret_t` returns `QL_OK` (0) on success, so
   `if (rc != QL_OK)` is the correct check.
 
-## Why the index files are not in the generated reference
+## Why this file is called `index.md`
 
-Doxygen reads all three files named `README.md` (the repository root, `docs/`,
-and `docs/zh/`) but publishes only the root one as a page: it keys Markdown
-pages by file name, so the others collapse onto the same label and are dropped
-without a warning. Links to them resolve to their directory pages instead.
+Doxygen keys Markdown pages by file name. With a `README.md` at the repository
+root *and* one here, the two collapse onto the same label: only the root one is
+published, this page silently disappears from the generated reference, and every
+link to it becomes an unresolved `\ref` — which the documentation job treats as
+an error.
 
-This is left as it is on purpose. A `README.md` is what a code host displays
-when someone browses a directory, which is precisely the audience for these
-indexes; navigation inside the generated reference comes from
-[`mainpage.md`](mainpage.md), which lists every page. Renaming them to
-`index.md` would fix Doxygen at the cost of the repository browsing
-experience.
+Naming it `index.md` gives it a page of its own. The cost is that a code host
+will not render it automatically when someone browses this directory, which is
+why [`mainpage.md`](mainpage.md) exists as the entry point inside the generated
+reference and the repository root `README.md` links here.
