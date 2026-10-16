@@ -1,11 +1,27 @@
 # qlib 中文文档
 
-本目录是 [英文文档](../index.md) 的简体中文版本，内容与之一一对应。
+本目录包含两套文档，以及构建 API 参考所需的工具。
 
 | 路径 | 读者 | 内容 |
 |---|---|---|
 | [`user/`](user/getting-started.md) | 库的使用者 | 构建、集成、各模块用法 |
 | [`technical/`](technical/architecture.md) | 贡献者与维护者 | 架构、设计决策、ABI 策略、可移植性、构建系统、测试策略 |
+| [`mainpage.md`](../mainpage.md) | Doxygen | 生成的 API 参考的着陆页；只有英文一版 |
+| [`Doxyfile.in`](../Doxyfile.in) | Doxygen | 配置模板，由 CMake 填充 |
+
+## 语言
+
+英文文档位于 [`../`](../index.md)，本目录是它的简体中文版本：两套文档逐文件对应，
+并且都会进入生成的 Doxygen 参考。`mainpage.md` 是唯一的例外——它只能有一份，因此
+没有中文对应文件。
+
+修改某一页时，请在同一次改动中一并更新对应的另一语言版本，或者明确说明该译文已过期。
+
+两套文档树之间的相对链接由 CI 检查：
+
+```bash
+python3 ci/check_links.py
+```
 
 ## 用户文档
 
@@ -25,6 +41,32 @@
 5. [构建系统](technical/build-system.md) —— CMake 结构与如何新增模块
 6. [测试](technical/testing.md) —— 测试、模糊测试与静态分析的策略
 
+## 构建 API 参考
+
+API 参考由 [Doxygen](https://www.doxygen.nl/) 生成。CMake 通过 `QLIB_BUILD_DOCS`
+选项驱动它：
+
+```bash
+cmake -S . -B build -DQLIB_BUILD_DOCS=ON
+cmake --build build --target docs
+```
+
+生成结果位于 `docs/html/index.html`，用浏览器打开即可。生成的 `docs/html/` 与
+`docs/latex/` 目录不纳入 git 跟踪。
+
+如果更想手工运行 Doxygen，请自行填写 `Doxyfile.in` 里的占位符，再把 `doxygen`
+指向生成出来的文件：
+
+```bash
+cd docs
+sed -e 's|@PROJECT_SOURCE_DIR@|..|g' \
+    -e 's|@PROJECT_BINARY_DIR@|..|g' \
+    -e 's|@PROJECT_VERSION@|0.1.0|g' \
+    -e 's|@PROJECT_NAME@|qlib|g' \
+    Doxyfile.in > Doxyfile
+doxygen Doxyfile
+```
+
 ## 阅读约定
 
 - 代码片段除非明确标注为"片段"，否则均可直接编译。
@@ -32,17 +74,7 @@
 - 所有返回 `ql_ret_t` 的函数，成功时返回 `QL_OK`（值为 0），因此正确的判断写法是
   `if (rc != QL_OK)`。
 - 标识符、文件名、命令行、编译选项、CMake 选项名等一律保留英文原文，不做翻译。
-
-## 关于 API 参考
-
-API 参考由 Doxygen 生成，内容为英文，同时包含中英文两套文档页面：
-
-```bash
-cmake -S . -B build -DQLIB_BUILD_DOCS=ON
-cmake --build build --target docs
-```
-
-生成结果位于 `docs/html/index.html`。详见[英文文档索引](../index.md)。
+  这一条只适用于中文文档，因此英文版没有对应的条目。
 
 ## 为什么这个文件叫 `index.md`
 

@@ -148,7 +148,7 @@ Inheriting rather than duplicating keeps the enabled-check list in one place. No
 
 ## Fuzzing
 
-There are two libFuzzer targets, both built only when `QLIB_BUILD_FUZZ=ON` and the compiler is Clang (`-fsanitize=fuzzer`). With any other compiler, [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) emits a `WARNING` instead of silently producing nothing.
+There are three libFuzzer targets, all built only when `QLIB_BUILD_FUZZ=ON` and the compiler is Clang (`-fsanitize=fuzzer`). With any other compiler, [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) emits a `WARNING` instead of silently producing nothing.
 
 | Target | Guards |
 |---|---|

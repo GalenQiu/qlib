@@ -148,7 +148,7 @@ ctest 有一个内置的 `WILL_FAIL` 属性，可以反转测试结果，它显�
 
 ## 模糊测试
 
-共有两个 libFuzzer 模糊测试目标，二者都仅在 `QLIB_BUILD_FUZZ=ON` 且编译器为 Clang（`-fsanitize=fuzzer`）时构建。换用其他编译器时，[`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 会发出 `WARNING`，而不是悄无声息地什么都不产出。
+共有三个 libFuzzer 模糊测试目标，它们都仅在 `QLIB_BUILD_FUZZ=ON` 且编译器为 Clang（`-fsanitize=fuzzer`）时构建。换用其他编译器时，[`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 会发出 `WARNING`，而不是悄无声息地什么都不产出。
 
 | 目标 | 守卫内容 |
 |---|---|
