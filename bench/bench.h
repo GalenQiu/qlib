@@ -40,6 +40,11 @@ typedef struct
 extern const ql_bench_suite ql_bench_suite_vector;
 extern const ql_bench_suite ql_bench_suite_mem;
 
+/* Present only when the optional network module was built. */
+#ifdef QLIB_HAS_NET
+extern const ql_bench_suite ql_bench_suite_net;
+#endif
+
 /**
  * @brief Consume a value so the optimiser cannot delete the work that made it.
  */

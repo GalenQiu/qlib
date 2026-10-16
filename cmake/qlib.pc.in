@@ -2,6 +2,12 @@
 # is the only way to stay correct when the package is staged with
 # `cmake --install --prefix <other>` or DESTDIR, both of which leave the
 # configure-time CMAKE_INSTALL_PREFIX untouched.
+#
+# The Cflags line ends with a substituted define list. It carries
+# -DQLIB_HAS_NET when the optional network module was built, so a non-CMake
+# consumer sees the same umbrella header a CMake consumer does. Do not spell
+# that substitution out as an at-sign token anywhere in these comments: CMake
+# replaces every one it finds, comments included.
 prefix=${pcfiledir}/../..
 exec_prefix=${prefix}
 libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
@@ -10,5 +16,5 @@ includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 Name: qlib
 Description: @PROJECT_DESCRIPTION@
 Version: @PROJECT_VERSION@
-Cflags: -I${includedir}
+Cflags: -I${includedir}@QLIB_PC_DEFINES@
 Libs: -L${libdir} -lqlib

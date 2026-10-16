@@ -32,6 +32,7 @@ python3 ci/check_links.py
 3. [Error handling](user/errors.md) — return codes, `ql_strerror`, the error handler
 4. [Memory](user/memory.md) — the allocator abstraction and the allocation helpers
 5. [Vector](user/vector.md) — the growable array
+6. [Network addresses](user/net.md) — parsing and formatting IPv4 addresses
 
 ## Technical documentation
 

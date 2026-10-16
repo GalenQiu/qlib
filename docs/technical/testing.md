@@ -154,6 +154,7 @@ There are two libFuzzer targets, both built only when `QLIB_BUILD_FUZZ=ON` and t
 |---|---|
 | [`fuzz_vector.c`](../../fuzz/fuzz_vector.c) | The container API: growth, shifting, and the element-aliasing paths |
 | [`fuzz_mem.c`](../../fuzz/fuzz_mem.c) | The arithmetic in `ql_mem`: padded sizes, alignment rounding, overflow helpers |
+| [`fuzz_net.c`](../../fuzz/fuzz_net.c) | The address parser: the round-trip invariant, and clean refusal of arbitrary text |
 
 ### `fuzz_mem`
 
@@ -288,7 +289,7 @@ Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Every j
 | Job | Runner | Configuration | What it guards |
 |---|---|---|---|
 | `linux` | `ubuntu-24.04`, matrix `gcc` / `clang` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON` | Both Linux compilers build warning-free and pass the suite, and the benchmark is compiled and smoke-run through `qlib_bench_smoke` |
-| `macos` | `macos-latest` | `-DQLIB_WERROR=ON` | AppleClang builds and passes — the third claimed platform |
+| `macos` | `macos-latest` | `-DQLIB_WERROR=ON -DQLIB_BUILD_NET=OFF` | AppleClang builds and passes — the third claimed platform — and, since the network module has no platform-specific code, this is also where the *disabled* module configuration is exercised: its source, its header and its umbrella include all have to disappear cleanly |
 | `windows` | `windows-latest`, matrix `shared` `OFF`/`ON` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_SHARED=...` | MSVC builds; the `ON` variant is the only place `QLIB_EXPORT`, `__declspec(dllexport)` and `QLIB_STATIC_DEFINE` are exercised for real, and `QLIB_BUILD_BENCH` is the only thing that compiles the `QueryPerformanceCounter` timer path |
 | `sanitizers` | `ubuntu-24.04`, clang | `-DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug` | No memory errors or undefined behaviour in the unit suite |
 | `fuzz` | `ubuntu-24.04`, clang | `-DQLIB_BUILD_FUZZ=ON`, then `-max_total_time=120 -max_len=256` | Memory safety and invariants under arbitrary operation sequences; uploads `crash-*` as the `fuzz-crash` artifact on failure |

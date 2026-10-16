@@ -12,5 +12,8 @@
 MU_DECLARE_SUITE(test_suite_common);
 MU_DECLARE_SUITE(test_suite_mem);
 MU_DECLARE_SUITE(test_suite_vector);
+#ifdef QLIB_HAS_NET
+MU_DECLARE_SUITE(test_suite_net);
+#endif
 
 #endif /* QLIB_TEST_SUITES_H */

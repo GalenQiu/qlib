@@ -154,6 +154,7 @@ ctest 有一个内置的 `WILL_FAIL` 属性，可以反转测试结果，它显�
 |---|---|
 | [`fuzz_vector.c`](../../../fuzz/fuzz_vector.c) | 容器 API：扩容、搬移，以及元素别名路径 |
 | [`fuzz_mem.c`](../../../fuzz/fuzz_mem.c) | `ql_mem` 中的算术：填充后的尺寸、对齐取整、溢出辅助函数 |
+| [`fuzz_net.c`](../../../fuzz/fuzz_net.c) | 地址解析器：往返不变量，以及对任意文本的干净拒绝 |
 
 ### `fuzz_mem`
 
@@ -273,7 +274,7 @@ cmake --build build
 | 任务 | 运行器 | 配置 | 它守卫什么 |
 |---|---|---|---|
 | `linux` | `ubuntu-24.04`，矩阵 `gcc` / `clang` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON` | 两个 Linux 编译器都无警告地构建并通过测试套件，且基准测试会经 `qlib_bench_smoke` 编译并冒烟运行 |
-| `macos` | `macos-latest` | `-DQLIB_WERROR=ON` | AppleClang 构建并通过——第三个声称支持的平台 |
+| `macos` | `macos-latest` | `-DQLIB_WERROR=ON -DQLIB_BUILD_NET=OFF` | AppleClang 构建并通过——第三个声称支持的平台——并且，由于网络模块没有任何平台相关代码，这里也是演练*禁用模块*配置的地方：它的源文件、头文件和伞形头文件包含都必须干净地消失 |
 | `windows` | `windows-latest`，矩阵 `shared` 取 `OFF`/`ON` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_SHARED=...` | MSVC 构建；只有 `ON` 这一变体才真正走通 `QLIB_EXPORT`、`__declspec(dllexport)` 和 `QLIB_STATIC_DEFINE`，并且 `QLIB_BUILD_BENCH` 是唯一会编译 `QueryPerformanceCounter` 计时路径的配置 |
 | `sanitizers` | `ubuntu-24.04`，clang | `-DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug` | 单元测试套件中没有内存错误或未定义行为 |
 | `fuzz` | `ubuntu-24.04`，clang | `-DQLIB_BUILD_FUZZ=ON`，随后 `-max_total_time=120 -max_len=256` | 任意操作序列下的内存安全与不变量；失败时把 `crash-*` 作为 `fuzz-crash` 工件上传 |

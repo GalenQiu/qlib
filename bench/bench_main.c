@@ -96,6 +96,9 @@ static size_t ql_bench_scaled(size_t iterations, double scale)
 static const ql_bench_suite* const g_suites[] = {
     &ql_bench_suite_vector,
     &ql_bench_suite_mem,
+#ifdef QLIB_HAS_NET
+    &ql_bench_suite_net,
+#endif
 };
 
 static const char* ql_bench_standard(void)

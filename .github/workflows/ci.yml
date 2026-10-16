@@ -50,8 +50,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The network module has no platform-specific code, so it gains nothing
+      # from being built on a third platform. This job is where the disabled
+      # configuration is exercised instead: the optional module's source, its
+      # header and its umbrella include all have to disappear cleanly.
       - name: Configure
-        run: cmake -S . -B build -DQLIB_WERROR=ON
+        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_NET=OFF
 
       - name: Build
         run: cmake --build build --parallel
@@ -194,8 +198,12 @@ jobs:
 
       - name: Fail on any Doxygen warning
         run: |
+          set -euo pipefail
           test -f docs/html/index.html
           echo "docs/html/index.html generated"
+          # Guard the log itself: grepping a file that does not exist exits
+          # non-zero, which would otherwise read as "no warnings found".
+          test -f build/doxygen.log
           if grep -q "warning:" build/doxygen.log; then
             echo "Doxygen reported $(grep -c 'warning:' build/doxygen.log) warning(s):"
             grep "warning:" build/doxygen.log

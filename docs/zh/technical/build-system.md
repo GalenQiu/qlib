@@ -7,7 +7,7 @@
 | [`CMakeLists.txt`](../../../CMakeLists.txt) | 根项目：选项、sanitizer、警告目标、库目标、子目录、安装/导出规则 |
 | [`tests/CMakeLists.txt`](../../../tests/CMakeLists.txt) | `qlib_test` 可执行文件与 `qlib_harness_selftest` 探针 |
 | [`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) | `fuzz_vector` 和 `fuzz_mem` libFuzzer 目标 |
-| [`bench/CMakeLists.txt`](../../../bench/CMakeLists.txt) | `qlib_bench` 微基准测试套件 |
+| [`bench/CMakeLists.txt`](../../../bench/CMakeLists.txt) | `qlib_bench` 微基准测试套件（构建该模块时包含网络相关用例） |
 | [`cmake/qlibConfig.cmake.in`](../../../cmake/qlibConfig.cmake.in) | 供 `find_package(qlib)` 使用的包配置模板 |
 | [`cmake/qlib.pc.in`](../../../cmake/qlib.pc.in) | pkg-config 模板 |
 | [`cmake/cmake_uninstall.cmake.in`](../../../cmake/cmake_uninstall.cmake.in) | 由 `uninstall` 目标运行的脚本 |
@@ -60,7 +60,7 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 | `QLIB_BUILD_TESTS` | 顶层时为 `ON`，否则为 `OFF` | 添加 `tests/` 子目录并调用 `enable_testing()` |
 | `QLIB_BUILD_BENCH` | `OFF` | 添加 `bench/` 子目录，构建 `qlib_bench` 可执行文件 |
 | `QLIB_BUILD_FUZZ` | `OFF` | 添加 `fuzz/` 子目录。需要 Clang；否则产生 `WARNING` |
-| `QLIB_BUILD_NET` | `OFF` | 暂无内容；发出 `WARNING`，说明该模块尚未实现 |
+| `QLIB_BUILD_NET` | `ON` | 把 `src/ql_net.c` 加入库，安装 `ql_net.h`，并为使用方定义 `QLIB_HAS_NET` |
 | `QLIB_SHARED` | `OFF` | 使用 `add_library(qlib SHARED ...)` 而非 `STATIC` |
 | `QLIB_WERROR` | `OFF` | 向 `qlib_warnings` 添加 `-Werror`（GCC/Clang）或 `/WX`（MSVC） |
 | `QLIB_INSTALL` | `ON` | 启用全部安装/导出/包配置/pkg-config/uninstall 规则 |
@@ -197,6 +197,34 @@ endif()
 
 - 该代码块位于 `add_library(qlib ...)` **之前**。目录属性会被其后创建的目标捕获，并由其后添加的子目录继承，因此 `qlib`、`qlib_test`、`qlib_harness_selftest` 和 `fuzz_vector` 都会得到这些选项，无需逐个指名。
 - 它**不是** `INTERFACE` 目标。这些选项必须到达测试，而只链接到 `qlib` 的接口目标做不到这一点；同时它们不能成为已安装目标接口的一部分，而 `PUBLIC` 链接会导致这种结果。`add_link_options` 还覆盖链接步骤，而 sanitizer 需要这一步。
+
+## 可选模块
+
+`QLIB_BUILD_NET` 是第一个可以被关闭的模块，而把它关掉要移除的不只是它的源文件。
+有四样东西是绑在一起的：
+
+| 位置 | 构建该模块时 | 不构建时 |
+|---|---|---|
+| `QLIB_SRC` | 追加 `src/ql_net.c` | 不追加 |
+| 目标定义 | 添加 `QLIB_HAS_NET` 作为 `PUBLIC` 编译定义 | 不添加 |
+| 安装的头文件 | 安装 `ql_net.h` | 通过目录安装中的 `PATTERN "ql_net.h" EXCLUDE` 排除 |
+| `qlib.pc` | `Cflags` 增加 `-DQLIB_HAS_NET` | `Cflags` 不变 |
+
+`PUBLIC` 定义是它对 CMake 使用方起作用的原因，pkg-config 条目则是它对其他所有人
+起作用的原因。两者都存在，是因为 `include/qlib/qlib.h` 只在 `#ifdef QLIB_HAS_NET`
+下包含该模块的头文件：
+
+```c
+#ifdef QLIB_HAS_NET
+#  include "qlib/ql_net.h"
+#endif
+```
+
+没有这道守卫，伞形头文件在没有该模块的构建中就会失效。没有条件化安装，被禁用的
+构建会交出一个其符号并不存在的头文件，而失败会在之后才以未定义引用的形式浮现，
+而不是立刻出现。测试、模糊测试和基准测试的源文件列表出于同样的原因也是条件化
+的，它们的注册点（`tests/test_main.c`、`bench/bench_main.c`）使用同一个宏。
+
 
 ## 新增模块
 

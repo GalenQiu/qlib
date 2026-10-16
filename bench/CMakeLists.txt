@@ -3,11 +3,19 @@
 # Only built when QLIB_BUILD_BENCH=ON. Nothing here is installed: the benchmark
 # is a developer tool, not part of the library.
 
-add_executable(qlib_bench
+set(QLIB_BENCH_SRC
     bench_main.c
     bench_vector.c
     bench_mem.c
 )
+
+# bench_net.c only exists when the optional network module is built; the suite
+# registration in bench_main.c is guarded by the same macro.
+if(QLIB_BUILD_NET)
+    list(APPEND QLIB_BENCH_SRC bench_net.c)
+endif()
+
+add_executable(qlib_bench ${QLIB_BENCH_SRC})
 
 target_link_libraries(qlib_bench PRIVATE qlib::qlib qlib_warnings)
 

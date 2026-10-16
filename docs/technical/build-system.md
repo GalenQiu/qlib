@@ -7,7 +7,7 @@
 | [`CMakeLists.txt`](../../CMakeLists.txt) | Root project: options, sanitizers, warning target, library target, subdirectories, install/export rules |
 | [`tests/CMakeLists.txt`](../../tests/CMakeLists.txt) | The `qlib_test` executable and the `qlib_harness_selftest` probe |
 | [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) | The `fuzz_vector` and `fuzz_mem` libFuzzer targets |
-| [`bench/CMakeLists.txt`](../../bench/CMakeLists.txt) | The `qlib_bench` micro-benchmark suite |
+| [`bench/CMakeLists.txt`](../../bench/CMakeLists.txt) | The `qlib_bench` micro-benchmark suite (network cases included when the module is built) |
 | [`cmake/qlibConfig.cmake.in`](../../cmake/qlibConfig.cmake.in) | Package config template for `find_package(qlib)` |
 | [`cmake/qlib.pc.in`](../../cmake/qlib.pc.in) | pkg-config template |
 | [`cmake/cmake_uninstall.cmake.in`](../../cmake/cmake_uninstall.cmake.in) | Script run by the `uninstall` target |
@@ -60,7 +60,7 @@ Registered tests:
 | `QLIB_BUILD_TESTS` | `ON` if top level, else `OFF` | Adds the `tests/` subdirectory and calls `enable_testing()` |
 | `QLIB_BUILD_BENCH` | `OFF` | Adds the `bench/` subdirectory, building the `qlib_bench` executable |
 | `QLIB_BUILD_FUZZ` | `OFF` | Adds the `fuzz/` subdirectory. Requires Clang; otherwise a `WARNING` |
-| `QLIB_BUILD_NET` | `OFF` | Nothing yet; emits a `WARNING` that the module is unimplemented |
+| `QLIB_BUILD_NET` | `ON` | Adds `src/ql_net.c` to the library, installs `ql_net.h`, and defines `QLIB_HAS_NET` for consumers |
 | `QLIB_SHARED` | `OFF` | `add_library(qlib SHARED ...)` instead of `STATIC` |
 | `QLIB_WERROR` | `OFF` | Adds `-Werror` (GCC/Clang) or `/WX` (MSVC) to `qlib_warnings` |
 | `QLIB_INSTALL` | `ON` | Enables all install/export/package-config/pkg-config/uninstall rules |
@@ -197,6 +197,37 @@ Two reasons for the placement and the mechanism:
 
 - The block sits **before** `add_library(qlib ...)`. Directory properties are captured by targets created afterwards, and are inherited by subdirectories added later, so `qlib`, `qlib_test`, `qlib_harness_selftest` and `fuzz_vector` all get the flags without naming them individually.
 - It is **not** an `INTERFACE` target. The flags must reach the tests, which an interface target linked only to `qlib` would not do, and they must not become part of the installed target's interface, which a `PUBLIC` link would cause. `add_link_options` also covers the link step, which sanitizers require.
+
+## Optional modules
+
+`QLIB_BUILD_NET` is the first module that can be switched off, and switching it
+off has to remove more than its source. Four things are tied together:
+
+| Where | When the module is built | When it is not |
+|---|---|---|
+| `QLIB_SRC` | `src/ql_net.c` appended | not appended |
+| Target definition | `QLIB_HAS_NET` added as a `PUBLIC` compile definition | not added |
+| Installed headers | `ql_net.h` installed | excluded, via `PATTERN "ql_net.h" EXCLUDE` in the directory install |
+| `qlib.pc` | `Cflags` gains `-DQLIB_HAS_NET` | `Cflags` unchanged |
+
+The `PUBLIC` definition is what makes it work for CMake consumers, and the
+pkg-config entry is what makes it work for everyone else. Both exist because
+`include/qlib/qlib.h` includes the module's header only under
+`#ifdef QLIB_HAS_NET`:
+
+```c
+#ifdef QLIB_HAS_NET
+#  include "qlib/ql_net.h"
+#endif
+```
+
+Without that guard the umbrella header would break in a build without the
+module. Without the conditional install, a disabled build would hand out a
+header whose symbols do not exist, and the failure would surface later as an
+undefined reference rather than immediately. Test, fuzz and benchmark source
+lists are conditional for the same reason, and their registration points
+(`tests/test_main.c`, `bench/bench_main.c`) use the same macro.
+
 
 ## Adding a new module
 

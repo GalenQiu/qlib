@@ -8,6 +8,11 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang")
         fuzz_mem
     )
 
+    # fuzz_net only exists when the optional module it exercises is built.
+    if(QLIB_BUILD_NET)
+        list(APPEND QLIB_FUZZ_TARGETS fuzz_net)
+    endif()
+
     foreach(target IN LISTS QLIB_FUZZ_TARGETS)
         add_executable(${target} ${target}.c)
 

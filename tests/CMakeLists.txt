@@ -5,13 +5,21 @@
 # qlib_warnings is an INTERFACE target defined at the top level: the test code
 # is held to the same warning standard as the library itself.
 
-add_executable(qlib_test
+# test_net.c only exists when the optional network module is built, and the
+# matching MU_RUN_SUITE call in test_main.c is guarded by the same macro.
+set(QLIB_TEST_SRC
     minunit.c
     test_main.c
     test_common.c
     test_mem.c
     test_vector.c
 )
+
+if(QLIB_BUILD_NET)
+    list(APPEND QLIB_TEST_SRC test_net.c)
+endif()
+
+add_executable(qlib_test ${QLIB_TEST_SRC})
 
 target_link_libraries(qlib_test PRIVATE qlib::qlib qlib_warnings)
 

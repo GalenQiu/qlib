@@ -26,7 +26,9 @@ option(QLIB_BUILD_TESTS "Build qlib unit tests"       ${QLIB_TESTS_DEFAULT})
 option(QLIB_BUILD_BENCH "Build qlib benchmark"        OFF)
 option(QLIB_BUILD_FUZZ  "Build libFuzzer targets (Clang only)" OFF)
 # Placeholder module: defaulted OFF until there is something to build.
-option(QLIB_BUILD_NET   "Build qlib network module"   OFF)
+# The network module is optional so that a build can drop it. It has no
+# link dependency, but "modular and optional components" is the promise.
+option(QLIB_BUILD_NET   "Build qlib network module"   ON)
 option(QLIB_SHARED      "Build shared library"        OFF)
 option(QLIB_WERROR      "Treat compiler warnings as errors" OFF)
 option(QLIB_INSTALL     "Generate install and package config rules" ON)
@@ -101,12 +103,16 @@ endif()
 # Library target
 # ---------------------------------------------------------------------------
 # M2 source files: ql_common (errors/version), ql_mem (allocator),
-# ql_vector (dynamic array)
+# ql_vector (dynamic array). ql_net is optional and appended below.
 set(QLIB_SRC
     src/ql_common.c
     src/ql_mem.c
     src/ql_vector.c
 )
+
+if(QLIB_BUILD_NET)
+    list(APPEND QLIB_SRC src/ql_net.c)
+endif()
 
 if(QLIB_SHARED)
     add_library(qlib SHARED ${QLIB_SRC})
@@ -142,6 +148,18 @@ if(NOT QLIB_SHARED)
     target_compile_definitions(qlib PUBLIC QLIB_STATIC_DEFINE)
 endif()
 
+# An optional module has to be announced to consumers, not just compiled in:
+# the umbrella header <qlib/qlib.h> includes ql_net.h only when this is defined,
+# so a build without the module still has a working umbrella header. PUBLIC, so
+# it reaches anything linking qlib::qlib, and mirrored into qlib.pc below for
+# consumers that do not use CMake.
+if(QLIB_BUILD_NET)
+    target_compile_definitions(qlib PUBLIC QLIB_HAS_NET)
+    set(QLIB_PC_DEFINES " -DQLIB_HAS_NET")
+else()
+    set(QLIB_PC_DEFINES "")
+endif()
+
 set_target_properties(qlib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     VERSION   ${PROJECT_VERSION}
@@ -169,11 +187,6 @@ if(QLIB_BUILD_BENCH)
     add_subdirectory(bench)
 endif()
 
-# Placeholder module. It announces itself rather than silently doing nothing,
-# which is what a bare `option()` plus empty `if()` used to do.
-if(QLIB_BUILD_NET)
-    message(WARNING "qlib: QLIB_BUILD_NET=ON but the network module is not implemented yet; nothing will be built.")
-endif()
 
 # ---------------------------------------------------------------------------
 # Documentation
@@ -221,9 +234,17 @@ if(QLIB_INSTALL)
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
 
+    # The optional module's header is installed only when the module is built,
+    # so a disabled build cannot hand out a header whose symbols do not exist.
+    if(QLIB_BUILD_NET)
+        set(QLIB_NET_HEADER_RULE "")
+    else()
+        set(QLIB_NET_HEADER_RULE PATTERN "ql_net.h" EXCLUDE)
+    endif()
+
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/qlib"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-        FILES_MATCHING PATTERN "*.h"
+        FILES_MATCHING PATTERN "*.h" ${QLIB_NET_HEADER_RULE}
     )
 
     # The generated export header lives in the build tree, not the source tree.

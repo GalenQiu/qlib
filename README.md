@@ -20,6 +20,7 @@ Cross platform: Linux / macOS / Windows, MIT license.
 | `<qlib/ql_common.h>` | version, error codes, `ql_strerror`, error handler |
 | `<qlib/ql_mem.h>` | `ql_allocator_t` and the overflow checked allocation helpers |
 | `<qlib/ql_vector.h>` | `ql_vector_t`, a growable array of fixed size elements |
+| `<qlib/ql_net.h>` | IPv4 address parsing and formatting (optional module) |
 | `<qlib/qlib.h>` | umbrella header pulling in all of the above |
 
 ## Documentation
@@ -31,7 +32,8 @@ The full documentation lives in [`docs/`](docs/index.md), in English with a
   [integration](docs/user/integration.md),
   [error handling](docs/user/errors.md),
   [memory](docs/user/memory.md),
-  [vector](docs/user/vector.md)
+  [vector](docs/user/vector.md),
+  [network addresses](docs/user/net.md)
 - **Technical docs** — [architecture](docs/technical/architecture.md),
   [design decisions](docs/technical/design-decisions.md),
   [ABI and versioning](docs/technical/abi-and-versioning.md),
@@ -69,7 +71,7 @@ cmake --build . --config Debug
 - `QLIB_BUILD_BENCH=OFF` build the micro-benchmark suite (`bin/qlib_bench`)
 - `QLIB_BUILD_FUZZ=OFF` build libFuzzer targets; requires Clang, and with any
   other compiler the option warns instead of silently doing nothing
-- `QLIB_BUILD_NET=OFF` build network module (not implemented yet)
+- `QLIB_BUILD_NET=ON` build the optional network module (address handling)
 - `QLIB_SHARED=OFF` build shared library instead of static
 - `QLIB_WERROR=OFF` treat warnings as errors (recommended in CI)
 - `QLIB_INSTALL=ON` generate install / package config rules

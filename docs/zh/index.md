@@ -14,6 +14,7 @@
 3. [错误处理](user/errors.md) —— 返回码、`ql_strerror`、错误回调
 4. [内存管理](user/memory.md) —— 分配器抽象与分配辅助函数
 5. [动态数组](user/vector.md) —— 可增长数组 `ql_vector`
+6. [网络地址](user/net.md) —— 解析与格式化 IPv4 地址
 
 ## 技术文档
 
