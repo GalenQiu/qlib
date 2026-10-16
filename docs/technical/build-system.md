@@ -12,6 +12,7 @@
 | [`cmake/qlib.pc.in`](../../cmake/qlib.pc.in) | pkg-config template |
 | [`cmake/cmake_uninstall.cmake.in`](../../cmake/cmake_uninstall.cmake.in) | Script run by the `uninstall` target |
 | [`docs/Doxyfile.in`](../../docs/Doxyfile.in) | Doxygen configuration template for the `docs` target |
+| [`ci/`](../../ci) | Local checks: `check.sh`, the two Python checkers, and the Win32 syntax stub |
 
 `cmake_minimum_required(VERSION 3.16)`. The root file includes `GNUInstallDirs`, `CMakePackageConfigHelpers` and `GenerateExportHeader`.
 
@@ -244,6 +245,12 @@ The sequence below is what `ql_vector` did, and it is the checklist for the next
 9. **Add a fuzz target** if the module parses or transforms input: `fuzz/fuzz_foo.c` with `int LLVMFuzzerTestOneInput(const uint8_t*, size_t)`, forward-declared so `-Wmissing-prototypes` stays quiet, plus an `add_executable` block and an optional `add_test` smoke run in [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt).
 10. **Add benchmark cases** for anything whose cost a user might ask about: a `ql_bench_case` entry in [`bench/`](../../bench/CMakeLists.txt), with the correctness of the measured result asserted through `QL_BENCH_CHECK`. Put untimed work in the `setup` hook so it is not charged to the operation being measured.
 11. **Verify before committing**:
+
+```bash
+./ci/check.sh --quick    # the whole gate; drop --quick for sanitizers and fuzzing
+```
+
+To run the pieces by hand instead:
 
 ```bash
 cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON

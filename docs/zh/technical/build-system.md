@@ -12,6 +12,7 @@
 | [`cmake/qlib.pc.in`](../../../cmake/qlib.pc.in) | pkg-config 模板 |
 | [`cmake/cmake_uninstall.cmake.in`](../../../cmake/cmake_uninstall.cmake.in) | 由 `uninstall` 目标运行的脚本 |
 | [`docs/Doxyfile.in`](../../../docs/Doxyfile.in) | `docs` 目标的 Doxygen 配置模板 |
+| [`ci/`](../../../ci) | 本地检查：`check.sh`、两个 Python 检查器，以及 Win32 语法桩（stub） |
 
 `cmake_minimum_required(VERSION 3.16)`。根文件包含 `GNUInstallDirs`、`CMakePackageConfigHelpers` 和 `GenerateExportHeader`。
 
@@ -241,6 +242,12 @@ endif()
 9. **添加模糊测试目标**，前提是该模块会解析或转换输入：`fuzz/fuzz_foo.c`，其中包含 `int LLVMFuzzerTestOneInput(const uint8_t*, size_t)` 并做前置声明，以便 `-Wmissing-prototypes` 保持安静，再在 [`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 中加一个 `add_executable` 块和一个可选的 `add_test` 冒烟运行。
 10. **添加基准测试用例**，针对任何用户可能询问其开销的东西：在 [`bench/`](../../../bench/CMakeLists.txt) 中加一个 `ql_bench_case` 条目，并通过 `QL_BENCH_CHECK` 断言所测量结果的正确性。把不计时的工作放进 `setup` 钩子，这样它就不会被算进所测量的那个操作。
 11. **提交前验证**：
+
+```bash
+./ci/check.sh --quick    # 整个门禁；去掉 --quick 即可运行 sanitizer 和模糊测试
+```
+
+若要改为手动逐项运行：
 
 ```bash
 cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON

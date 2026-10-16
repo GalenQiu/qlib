@@ -267,6 +267,34 @@ cmake --build build
 
 `qlib_bench_smoke` 在 ctest 下以 `--quick` 运行该套件，因此每次运行都会构建并执行基准测试。它不对计时作任何断言——计时取决于机器——只断言这些用例仍会运行，并且仍能通过它们自己的正确性检查。这个冒烟测试立刻就证明了它的价值：第一版基准测试在只给出 `--quick` 时根本没有选中任何用例，因为“无过滤器”的条件写成了 `argc <= 1`。
 
+## 本地验证
+
+[`ci/check.sh`](../../../ci/check.sh) 在当前机器上运行整个矩阵，适用于 CI 不可达、或只是不想为一个小改动去跑 CI 的场合：
+
+```bash
+./ci/check.sh            # 全部
+./ci/check.sh --quick    # 跳过 sanitizer 构建和模糊测试
+```
+
+它按步骤报告 PASS、FAIL 或 SKIP，只要有失败就以非零状态退出。这一区分很重要：**SKIP 意味着缺少某个工具，而绝不意味着检查通过了。** 当 `doxygen` 缺席时，文档门禁会被跳过，而且是可见地跳过，而不是悄无声息地通过。
+
+| 步骤 | 它运行什么 |
+|---|---|
+| `links` | `ci/check_links.py` |
+| `i18n` | `ci/check_i18n.py` |
+| `format` | 对每个已跟踪的 `.c`/`.h` 运行 `clang-format --dry-run --Werror` |
+| `win32` | `ci/win32-syntax/windows.h` |
+| `build` | 带 `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON` 的严格 C11 构建，然后 ctest |
+| `net_off` | 同上，但带 `-DQLIB_BUILD_NET=OFF` |
+| `tidy` | 对 `src/`、`tests/` 和 `bench/` 运行 `clang-tidy` |
+| `docs` | Doxygen 构建，出现任何警告即失败 |
+| `sanitizers` | ASAN+UBSAN 构建，然后 ctest |
+| `fuzz` | 每个 libFuzzer 目标各跑 10 秒 |
+
+这个脚本刻意**不**像 CI 那样固定工具版本；装了什么就用什么。这使它只是一种便利，而不是替代品：CI 中固定的版本才是让“不新增警告”这一说法可复现的东西。
+
+`win32` 步骤之所以存在，是因为基准测试计时器的 MSVC 分支平时只由 Windows CI job 编译。`ci/win32-syntax/windows.h` 是一个最小桩（stub），只声明 qlib 用到的那些 Win32 名称，好让 Linux 编译器能对那个分支做类型检查。它能捕获拼错的成员名或错误的参数个数；它无法捕获任何与真实 SDK 有关的东西，它也不假装能做到。
+
 ## CI 任务
 
 定义在 [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml)。每个编译本库的 job 都会传 `-DQLIB_WERROR=ON`，并全局设置 `CTEST_OUTPUT_ON_FAILURE=1`，以便失败的测试打印其输出。所有第三方工具都固定版本，因为它们每一个都可能在不同发行版之间改变输出，而“不新增警告”的底线只有针对固定版本才有意义。

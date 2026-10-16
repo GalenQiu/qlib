@@ -282,6 +282,44 @@ correctness checks. That smoke test earned its place immediately: the first
 version selected no cases at all when given only `--quick`, because the "no
 filter" condition was `argc <= 1`.
 
+## Local verification
+
+[`ci/check.sh`](../../ci/check.sh) runs the whole matrix on the current machine,
+for when CI is unreachable or simply not wanted for a quick change:
+
+```bash
+./ci/check.sh            # everything
+./ci/check.sh --quick    # skip the sanitizer build and fuzzing
+```
+
+It reports PASS, FAIL or SKIP per step and exits non-zero if anything failed.
+The distinction matters: **a SKIP means a tool was missing, never that the check
+succeeded.** With `doxygen` absent the documentation gate is skipped and visibly
+so, rather than quietly passing.
+
+| Step | What it runs |
+|---|---|
+| `links` | `ci/check_links.py` |
+| `i18n` | `ci/check_i18n.py` |
+| `format` | `clang-format --dry-run --Werror` over every tracked `.c`/`.h` |
+| `win32` | `ci/win32-syntax/windows.h` |
+| `build` | strict C11 build with `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON`, then ctest |
+| `net_off` | the same with `-DQLIB_BUILD_NET=OFF` |
+| `tidy` | `clang-tidy` over `src/`, `tests/` and `bench/` |
+| `docs` | the Doxygen build, failing on any warning |
+| `sanitizers` | ASAN+UBSAN build, then ctest |
+| `fuzz` | each libFuzzer target for 10 seconds |
+
+The script deliberately does **not** pin tool versions the way CI does; it uses
+whatever is installed. That makes it a convenience, not a substitute: the pinned
+versions in CI are what make a "no new warnings" claim reproducible.
+
+The `win32` step exists because the MSVC branch of the benchmark timer is
+otherwise compiled only by the Windows CI job. `ci/win32-syntax/windows.h` is a
+minimal stub declaring just the Win32 names qlib uses, so a Linux compiler can
+type-check that branch. It catches a misspelled member or a wrong argument count;
+it cannot catch anything about the real SDK, and it does not pretend to.
+
 ## CI jobs
 
 Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Every job that compiles the library passes `-DQLIB_WERROR=ON`, and `CTEST_OUTPUT_ON_FAILURE=1` is set globally so a failing test prints its output. Every third-party tool is pinned, because each of them can change its output between releases and a floor on "no new warnings" is only meaningful against a fixed version.

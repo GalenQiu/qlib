@@ -31,7 +31,7 @@ python3 ci/check_links.py
 2. [Integration](user/integration.md) — consume qlib from CMake, pkg-config, or by vendoring
 3. [Error handling](user/errors.md) — return codes, `ql_strerror`, the error handler
 4. [Memory](user/memory.md) — the allocator abstraction and the allocation helpers
-5. [Vector](user/vector.md) — the growable array
+5. [Vector](user/vector.md) — the growable array, `ql_vector_t`
 6. [Network addresses](user/net.md) — parsing and formatting IPv4 addresses
 
 ## Technical documentation

@@ -45,7 +45,13 @@ clang-tidy src/*.c tests/*.c -p build
 - Add a unit test for every new feature and every bugfix.
 - Declare each new suite in `tests/test_suites.h` and run it from
   `tests/test_main.c`.
-- Run the suite under sanitizers:
+- Run everything before committing with one command. `ci/check.sh` is the local
+  equivalent of the CI matrix and reports PASS, FAIL or SKIP per step; a SKIP
+  means a tool was missing, never that the check passed:
+```bash
+./ci/check.sh
+```
+- Or run just the suite under sanitizers:
 ```bash
 cmake -S . -B build -DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build build

@@ -56,6 +56,14 @@ cmake --build .
 ./bin/qlib_test
 ```
 
+Or run the whole local verification — build, tests, sanitizers, fuzzing, static
+analysis and the documentation checks — in one command:
+
+```bash
+./ci/check.sh            # everything
+./ci/check.sh --quick    # skip the sanitizer build and fuzzing
+```
+
 Windows (MSVC, multi-config generator puts binaries in a per-config subfolder):
 ```
 mkdir build; cd build
