@@ -1,0 +1,34 @@
+# Build directories
+build/
+_build/
+cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+
+# Compiled binaries
+*.o
+*.a
+*.so
+*.dll
+*.lib
+*.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sanitizer / debug
+*.log
+*.profraw
+
+# Doxygen
+docs/html/
+docs/latex/
+

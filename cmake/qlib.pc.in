@@ -1,0 +1,14 @@
+# The .pc file is installed to <prefix>/<libdir>/pkgconfig/qlib.pc, so ${pcfiledir}
+# is the only way to stay correct when the package is staged with
+# `cmake --install --prefix <other>` or DESTDIR, both of which leave the
+# configure-time CMAKE_INSTALL_PREFIX untouched.
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: qlib
+Description: @PROJECT_DESCRIPTION@
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lqlib

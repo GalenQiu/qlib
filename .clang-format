@@ -1,0 +1,22 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+# The code base is written in Allman style (opening brace on its own line).
+BreakBeforeBraces: Allman
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+PointerAlignment: Left
+SpaceAfterCStyleCast: false
+SortIncludes: true
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+# Keep nested #include/#define readable instead of flushing them to column 0.
+IndentPPDirectives: AfterHash
+PPIndentWidth: 2
+# Do not pad macro line continuations out to ColumnLimit.
+AlignEscapedNewlines: Left
+...

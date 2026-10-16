@@ -1,0 +1,18 @@
+# Removes every file recorded in install_manifest.txt.
+# Used by the `uninstall` target; not intended to be run directly.
+
+set(_manifest "@PROJECT_BINARY_DIR@/install_manifest.txt")
+
+if(NOT EXISTS "${_manifest}")
+    message(FATAL_ERROR "Cannot find install manifest: ${_manifest}")
+endif()
+
+file(READ "${_manifest}" _files)
+string(REGEX REPLACE "\n" ";" _files "${_files}")
+
+foreach(_file ${_files})
+    if(EXISTS "${_file}" OR IS_SYMLINK "${_file}")
+        message(STATUS "Removing ${_file}")
+        file(REMOVE "${_file}")
+    endif()
+endforeach()
