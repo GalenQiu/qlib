@@ -146,6 +146,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Needs nothing but python3, so it runs before the Doxygen install to
+      # fail fast on a renamed page or a wrong "../" depth.
+      - name: Check documentation links
+        run: python3 ci/check_links.py
+
       - name: Install doxygen
         run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
 
@@ -159,9 +164,13 @@ jobs:
         run: |
           test -f docs/html/index.html
           echo "docs/html/index.html generated"
-          if grep -qE "warning:" build/doxygen.log; then
+          # The Doxyfile is warning-clean against the release the author
+          # verified (1.18.0). The runner image ships an older Doxygen, so a
+          # warning is reported as an annotation rather than failing the build:
+          # version skew is not by itself a defect in the documentation.
+          if grep -q "warning:" build/doxygen.log; then
             echo "::warning::Doxygen reported warnings"
-            grep -E "warning:" build/doxygen.log
+            grep "warning:" build/doxygen.log
           fi
 
       - name: Upload the reference

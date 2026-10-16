@@ -239,7 +239,7 @@ Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Every b
 | `sanitizers` | `ubuntu-24.04`, clang | `-DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug` | No memory errors or undefined behaviour in the unit suite |
 | `fuzz` | `ubuntu-24.04`, clang | `-DQLIB_BUILD_FUZZ=ON`, then `-max_total_time=120 -max_len=256` | Memory safety and invariants under arbitrary operation sequences; uploads `crash-*` as the `fuzz-crash` artifact on failure |
 | `package` | `ubuntu-24.04` | install to a prefix, then build two consumers | `find_package(qlib 0.1 REQUIRED)` and `pkg-config` both resolve and link |
-| `docs` | `ubuntu-24.04` | `-DQLIB_BUILD_DOCS=ON`, then `--target docs` | `Doxyfile.in` still parses and still produces `docs/html/index.html`; uploads the generated reference as the `api-reference` artifact |
+| `docs` | `ubuntu-24.04` | `python3 ci/check_links.py`, then `-DQLIB_BUILD_DOCS=ON` and `--target docs` | Every relative link in the Markdown resolves, and `Doxyfile.in` still parses and still produces `docs/html/index.html`; the reference is uploaded as the `api-reference` artifact |
 | `format` | `ubuntu-24.04` | `pip install clang-format==23.1.1` | Formatting of every file from `git ls-files '*.c' '*.h'`, with the version pinned because output differs between releases |
 | `tidy` | `ubuntu-24.04` | clang-tidy 23 from LLVM's apt repository | Static analysis of `src/*.c` and `tests/*.c` via `-p build`; `WarningsAsErrors: '*'` makes any finding fatal |
 

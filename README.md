@@ -24,7 +24,8 @@ Cross platform: Linux / macOS / Windows, MIT license.
 
 ## Documentation
 
-The full documentation lives in [`docs/`](docs/README.md):
+The full documentation lives in [`docs/`](docs/README.md), in English with a
+[Simplified Chinese translation](docs/zh/README.md):
 
 - **User guide** — [getting started](docs/user/getting-started.md),
   [integration](docs/user/integration.md),

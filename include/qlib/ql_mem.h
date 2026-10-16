@@ -35,9 +35,13 @@ typedef void (*ql_free_fn)(void* ptr, void* userdata);
  */
 typedef struct
 {
+    /** @brief Allocate @p size bytes, or return NULL. Must not be NULL. */
     ql_malloc_fn malloc;
+    /** @brief Resize a block, following libc realloc semantics. Must not be NULL. */
     ql_realloc_fn realloc;
+    /** @brief Release a block. Must tolerate a NULL pointer. Must not be NULL. */
     ql_free_fn free;
+    /** @brief Opaque pointer handed back to every callback. May be NULL. */
     void* userdata;
     /** Reserved for future growth (aligned allocation, ...). Must be zeroed. */
     void* reserved[4];

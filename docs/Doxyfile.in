@@ -21,19 +21,22 @@ OUTPUT_DIRECTORY       = @PROJECT_SOURCE_DIR@/docs
 # ---------------------------------------------------------------------------
 # Input
 #
-# The public headers carry the API documentation; src/ is included so the
-# documented static helpers show up; docs/ supplies the Markdown pages and
-# README.md is pulled in so it appears in the generated tree as well.
+# The public API reference is built from the installed headers plus the
+# Markdown pages. src/ is deliberately NOT an input: struct ql_vector and the
+# static helpers are implementation details, and documenting them would both
+# clutter the reference and publish a layout the ABI policy says callers must
+# not depend on. CONTRIBUTING.md is included so the many links to it from the
+# technical pages resolve.
 # ---------------------------------------------------------------------------
 INPUT                  = @PROJECT_SOURCE_DIR@/include \
-                         @PROJECT_SOURCE_DIR@/src \
                          @PROJECT_SOURCE_DIR@/docs \
-                         @PROJECT_SOURCE_DIR@/README.md
+                         @PROJECT_SOURCE_DIR@/README.md \
+                         @PROJECT_SOURCE_DIR@/CONTRIBUTING.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.c *.h *.md
 USE_MDFILE_AS_MAINPAGE = @PROJECT_SOURCE_DIR@/docs/mainpage.md
 
-# Keep generated output and build trees out of the input scan.
+# Keep generated output, build trees and test scaffolding out of the scan.
 EXCLUDE_PATTERNS       = */docs/html/* */docs/latex/* */build*/* */tests/* */fuzz/*
 
 # ---------------------------------------------------------------------------
@@ -41,7 +44,7 @@ EXCLUDE_PATTERNS       = */docs/html/* */docs/latex/* */build*/* */tests/* */fuz
 # ---------------------------------------------------------------------------
 OPTIMIZE_OUTPUT_FOR_C  = YES
 EXTRACT_ALL            = NO
-EXTRACT_STATIC         = YES
+EXTRACT_STATIC         = NO
 HIDE_UNDOC_MEMBERS     = NO
 SHOW_INCLUDE_FILES     = YES
 SOURCE_BROWSER         = YES

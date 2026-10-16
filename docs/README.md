@@ -10,6 +10,21 @@ reference.
 | [`mainpage.md`](mainpage.md) | Doxygen | Landing page of the generated API reference |
 | [`Doxyfile.in`](Doxyfile.in) | Doxygen | Configuration template, filled in by CMake |
 
+## Languages
+
+These pages are written in English. A Simplified Chinese translation of every
+page lives under [`zh/`](zh/README.md); the two sets mirror each other file for
+file, and both are included in the generated Doxygen reference.
+
+When changing a page, update its counterpart under `zh/` in the same change, or
+note explicitly that the translation is now stale.
+
+Relative links across both trees are checked in CI:
+
+```bash
+python3 ci/check_links.py
+```
+
 ## User documentation
 
 1. [Getting started](user/getting-started.md) — build the library and run the tests
@@ -61,3 +76,17 @@ doxygen Doxyfile
   the default allocator".
 - Every function that returns `ql_ret_t` returns `QL_OK` (0) on success, so
   `if (rc != QL_OK)` is the correct check.
+
+## Why the index files are not in the generated reference
+
+Doxygen reads all three files named `README.md` (the repository root, `docs/`,
+and `docs/zh/`) but publishes only the root one as a page: it keys Markdown
+pages by file name, so the others collapse onto the same label and are dropped
+without a warning. Links to them resolve to their directory pages instead.
+
+This is left as it is on purpose. A `README.md` is what a code host displays
+when someone browses a directory, which is precisely the audience for these
+indexes; navigation inside the generated reference comes from
+[`mainpage.md`](mainpage.md), which lists every page. Renaming them to
+`index.md` would fix Doxygen at the cost of the repository browsing
+experience.
