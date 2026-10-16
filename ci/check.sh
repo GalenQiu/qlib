@@ -146,6 +146,34 @@ step_tidy() {
     clang-tidy src/*.c tests/*.c bench/*.c -p "$SCRATCH/build"
 }
 
+step_package() {
+    have cmake || { echo "cmake not found"; return 2; }
+
+    local prefix="$SCRATCH/prefix"
+    cmake -S . -B "$SCRATCH/pkg" -DQLIB_WERROR=ON -DQLIB_BUILD_TESTS=OFF \
+        -DCMAKE_INSTALL_PREFIX="$prefix" >/dev/null || return 1
+    cmake --build "$SCRATCH/pkg" >/dev/null || return 1
+    cmake --install "$SCRATCH/pkg" >/dev/null || return 1
+
+    # ci/consumer is the same fixture the CI package job builds, so this step
+    # verifies exactly what CI verifies.
+    echo "--- find_package ---"
+    cmake -S ci/consumer -B "$SCRATCH/consumer" -DCMAKE_PREFIX_PATH="$prefix" >/dev/null || return 1
+    cmake --build "$SCRATCH/consumer" >/dev/null || return 1
+    "$SCRATCH/consumer/consumer" || return 1
+
+    if have pkg-config; then
+        echo "--- pkg-config ---"
+        # shellcheck disable=SC2046
+        cc ci/consumer/main.c \
+            $(PKG_CONFIG_PATH="$prefix/lib/pkgconfig" pkg-config --cflags --libs qlib) \
+            -o "$SCRATCH/consumer_pc" || return 1
+        "$SCRATCH/consumer_pc" || return 1
+    else
+        echo "pkg-config not found; find_package path only"
+    fi
+}
+
 step_docs() {
     have doxygen || { echo "doxygen not found"; return 2; }
     have cmake || { echo "cmake not found"; return 2; }
@@ -224,6 +252,7 @@ run_step step_win32
 run_step step_build
 run_step step_net_off
 run_step step_tidy
+run_step step_package
 run_step step_docs
 run_step step_sanitizers
 run_step step_fuzz

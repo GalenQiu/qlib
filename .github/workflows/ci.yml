@@ -234,36 +234,21 @@ jobs:
           cmake --build build --parallel
           cmake --install build
 
-      - name: Create consumer project
-        run: |
-          mkdir -p consumer
-          printf '%s\n' \
-            'cmake_minimum_required(VERSION 3.16)' \
-            'project(consumer LANGUAGES C)' \
-            'find_package(qlib 0.1 REQUIRED)' \
-            'add_executable(app main.c)' \
-            'target_link_libraries(app PRIVATE qlib::qlib)' \
-            > consumer/CMakeLists.txt
-          printf '%s\n' \
-            '#include <qlib/ql_common.h>' \
-            'int main(void) {' \
-            '    ql_allocator_t a = ql_default_allocator();' \
-            '    return a.malloc != NULL ? 0 : 1;' \
-            '}' \
-            > consumer/main.c
-
+      # ci/consumer/ is checked in, so this job and ci/check.sh build exactly
+      # the same consumer. A generated fixture drifted from the local one once
+      # already and the divergence went unnoticed.
       - name: Build consumer with find_package
         run: |
-          cmake -S consumer -B consumer/build -DCMAKE_PREFIX_PATH="$PWD/prefix"
-          cmake --build consumer/build
-          ./consumer/build/app
+          cmake -S ci/consumer -B build-consumer -DCMAKE_PREFIX_PATH="$PWD/prefix"
+          cmake --build build-consumer
+          ./build-consumer/consumer
 
       - name: Build consumer with pkg-config
         run: |
           export PKG_CONFIG_PATH="$PWD/prefix/lib/pkgconfig"
           pkg-config --modversion qlib
-          cc consumer/main.c $(pkg-config --cflags --libs qlib) -o consumer/app_pc
-          ./consumer/app_pc
+          cc ci/consumer/main.c $(pkg-config --cflags --libs qlib) -o consumer_pc
+          ./consumer_pc
 
   # ---------------------------------------------------------------------------
   # Formatting. clang-format output changes between releases, so the version is
@@ -301,8 +286,12 @@ jobs:
 
       - name: Install clang-tidy 23
         run: |
+          # The key must be dearmored. Piping the ASCII-armored key straight to
+          # a signed-by keyring leaves apt's verifier (gpgv, which does not
+          # dearmor) unable to read it, and the failure surfaces as "invalid
+          # packet" from an unsigned repository rather than as a key problem.
           curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
-            | sudo tee /usr/share/keyrings/llvm.gpg > /dev/null
+            | sudo gpg --dearmor --yes -o /usr/share/keyrings/llvm.gpg
           echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-23 main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
           sudo apt-get update
