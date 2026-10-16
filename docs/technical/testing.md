@@ -306,6 +306,7 @@ so, rather than quietly passing.
 | `build` | strict C11 build with `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON`, then ctest |
 | `net_off` | the same with `-DQLIB_BUILD_NET=OFF` |
 | `tidy` | `clang-tidy` over `src/`, `tests/` and `bench/` |
+| `package` | installs to a scratch prefix, then builds `ci/consumer` with `find_package` and `pkg-config` |
 | `docs` | the Doxygen build, failing on any warning |
 | `sanitizers` | ASAN+UBSAN build, then ctest |
 | `fuzz` | each libFuzzer target for 10 seconds |

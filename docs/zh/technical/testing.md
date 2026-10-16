@@ -287,6 +287,7 @@ cmake --build build
 | `build` | 带 `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON` 的严格 C11 构建，然后 ctest |
 | `net_off` | 同上，但带 `-DQLIB_BUILD_NET=OFF` |
 | `tidy` | 对 `src/`、`tests/` 和 `bench/` 运行 `clang-tidy` |
+| `package` | 安装到临时前缀，然后用 `find_package` 和 `pkg-config` 构建 `ci/consumer` |
 | `docs` | Doxygen 构建，出现任何警告即失败 |
 | `sanitizers` | ASAN+UBSAN 构建，然后 ctest |
 | `fuzz` | 每个 libFuzzer 目标各跑 10 秒 |
