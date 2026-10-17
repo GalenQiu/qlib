@@ -58,6 +58,33 @@ typedef struct
 static ql_log_state g_log;
 static bool g_ready;
 
+/*
+ * Per-thread field set, in both renderings. Keeping two buffers avoids
+ * re-rendering at record time: a field is formatted once when it is attached,
+ * and appending it to a record is then a copy. Two small buffers per thread is
+ * cheaper than parsing `key=value` back apart to emit JSON.
+ */
+typedef struct
+{
+    char plain[QL_LOG_FIELDS_MAX];
+    size_t plain_length;
+    char json[QL_LOG_FIELDS_MAX];
+    size_t json_length;
+    bool full;
+} ql_log_fields;
+
+static QL_THREAD_LOCAL ql_log_fields g_tls_fields;
+
+/** @brief Forget this thread's fields, keeping the storage. */
+static void ql_log_fields_clear(void)
+{
+    g_tls_fields.plain[0] = '\0';
+    g_tls_fields.plain_length = 0;
+    g_tls_fields.json[0] = '\0';
+    g_tls_fields.json_length = 0;
+    g_tls_fields.full = false;
+}
+
 /* Defined below, but the writer thread needs it. */
 static void ql_log_emit(const char* text, size_t length);
 
@@ -167,6 +194,107 @@ static void ql_log_json_escape(char* out, size_t cap, const char* text)
     }
 
     out[used] = '\0';
+}
+
+/** @brief Append the two renderings of one field, refusing to overflow. */
+static ql_ret_t ql_log_field_append(const char* key, const char* plain_value, const char* json_value)
+{
+    int plain_written;
+    int json_written;
+
+    if (key == NULL || plain_value == NULL || json_value == NULL || key[0] == '\0')
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_log_field: key or value is NULL or empty");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    plain_written = snprintf(g_tls_fields.plain + g_tls_fields.plain_length,
+                             sizeof g_tls_fields.plain - g_tls_fields.plain_length, " %s=%s", key, plain_value);
+    json_written = snprintf(g_tls_fields.json + g_tls_fields.json_length,
+                            /* Leading comma: the fields are appended straight after "msg", so a
+                             * trailing one would leave ",}" at the end of the object. */
+                            sizeof g_tls_fields.json - g_tls_fields.json_length, ",\"%s\":%s", key, json_value);
+    if (plain_written < 0 || json_written < 0)
+    {
+        return QL_ERR_SYS;
+    }
+    if ((size_t)plain_written >= sizeof g_tls_fields.plain - g_tls_fields.plain_length ||
+        (size_t)json_written >= sizeof g_tls_fields.json - g_tls_fields.json_length)
+    {
+        /* Truncated: drop this field rather than emit half of it. */
+        g_tls_fields.plain_length = strlen(g_tls_fields.plain);
+        g_tls_fields.json_length = strlen(g_tls_fields.json);
+        g_tls_fields.full = true;
+        ql_err_raise(QL_ERR_OUT_OF_RANGE, "ql_log_field: the field set is full");
+        return QL_ERR_OUT_OF_RANGE;
+    }
+
+    g_tls_fields.plain_length += (size_t)plain_written;
+    g_tls_fields.json_length += (size_t)json_written;
+    return QL_OK;
+}
+
+void ql_log_fields_begin(void)
+{
+    ql_log_fields_clear();
+}
+
+ql_ret_t ql_log_field_str(const char* key, const char* value)
+{
+    char plain[QL_LOG_FIELDS_MAX];
+    /* Two bytes of quotes and the terminator on top of an escaped value. */
+    char json[QL_LOG_FIELDS_MAX + 4];
+    char escaped[QL_LOG_FIELDS_MAX];
+
+    if (key == NULL || value == NULL)
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_log_field_str: key or value is NULL");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    ql_log_json_escape(escaped, sizeof escaped, value);
+    (void)snprintf(plain, sizeof plain, "%s", value);
+    (void)snprintf(json, sizeof json, "\"%s\"", escaped);
+    return ql_log_field_append(key, plain, json);
+}
+
+ql_ret_t ql_log_field_int(const char* key, long long value)
+{
+    char plain[64];
+
+    (void)snprintf(plain, sizeof plain, "%lld", value);
+    return ql_log_field_append(key, plain, plain);
+}
+
+ql_ret_t ql_log_field_uint(const char* key, unsigned long long value)
+{
+    char plain[64];
+
+    (void)snprintf(plain, sizeof plain, "%llu", value);
+    return ql_log_field_append(key, plain, plain);
+}
+
+ql_ret_t ql_log_field_bool(const char* key, bool value)
+{
+    return ql_log_field_append(key, value ? "true" : "false", value ? "true" : "false");
+}
+
+ql_ret_t ql_log_field_double(const char* key, double value, int precision)
+{
+    char plain[64];
+    int places = precision;
+
+    if (places < 0)
+    {
+        places = 0;
+    }
+    if (places > 17)
+    {
+        places = 17;
+    }
+
+    (void)snprintf(plain, sizeof plain, "%.*f", places, value);
+    return ql_log_field_append(key, plain, plain);
 }
 
 /** @brief Format the timestamp into @p out. */
@@ -785,7 +913,7 @@ static void ql_log_render(char* out, size_t cap, ql_log_level_t level, const cha
 
     if (g_log.format == QL_LOG_FORMAT_RAW)
     {
-        (void)snprintf(out, cap, "%s", message);
+        (void)snprintf(out, cap, "%s%s", message, g_tls_fields.plain);
         return;
     }
 
@@ -796,8 +924,8 @@ static void ql_log_render(char* out, size_t cap, ql_log_level_t level, const cha
 
         ql_log_json_escape(escaped, sizeof escaped, message);
         ql_log_json_escape(where, sizeof where, name);
-        (void)snprintf(out, cap, "{\"level\":\"%s\",\"file\":\"%s\",\"line\":%d,\"func\":\"%s\",\"msg\":\"%s\"}",
-                       g_level_names[level], where, line, func != NULL ? func : "?", escaped);
+        (void)snprintf(out, cap, "{\"level\":\"%s\",\"file\":\"%s\",\"line\":%d,\"func\":\"%s\",\"msg\":\"%s\"%s}",
+                       g_level_names[level], where, line, func != NULL ? func : "?", escaped, g_tls_fields.json);
         return;
     }
 
@@ -824,7 +952,7 @@ static void ql_log_render(char* out, size_t cap, ql_log_level_t level, const cha
 
         if (used < cap)
         {
-            (void)snprintf(out + used, cap - used, "%s:%d %s", name, line, message);
+            (void)snprintf(out + used, cap - used, "%s:%d %s%s", name, line, message, g_tls_fields.plain);
         }
     }
 }
@@ -841,6 +969,9 @@ void ql_log_vwrite(ql_log_level_t level, const char* file, int line, const char*
     }
     if (!ql_log_enabled(level))
     {
+        /* Fields belong to one record. A filtered-out record must not leave
+         * them to attach themselves to a later one. */
+        ql_log_fields_clear();
         return;
     }
 
@@ -895,6 +1026,8 @@ void ql_log_vwrite(ql_log_level_t level, const char* file, int line, const char*
     }
 
     ql_mutex_unlock(g_log.mutex);
+
+    ql_log_fields_clear();
 }
 
 void ql_log_write(ql_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...)

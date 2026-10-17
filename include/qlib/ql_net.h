@@ -126,6 +126,26 @@ QLIB_EXPORT ql_ret_t ql_net_addr_format(const ql_net_addr_t* addr, char* buf, si
 QLIB_NODISCARD QLIB_EXPORT bool ql_net_addr_equal(const ql_net_addr_t* a, const ql_net_addr_t* b);
 
 /**
+ * @brief Resolve a host name to an IPv4 address.
+ *
+ * Uses the platform resolver (`getaddrinfo`), so `/etc/hosts`, the DNS
+ * configuration and the platform's caching all apply. A numeric address is
+ * accepted and returned without a lookup, which is also the only form that
+ * works with no network at all.
+ *
+ * Only IPv4 results are considered; a host with only AAAA records is reported
+ * as not found rather than silently connecting over a family this module does
+ * not implement.
+ *
+ * @param host Host name or numeric IPv4 address. Must not be NULL or empty.
+ * @param out  Receives the first IPv4 address found.
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_NOT_FOUND when the name does not
+ *         resolve, QL_ERR_AGAIN when the resolver is temporarily unable,
+ *         QL_ERR_NOMEM, or QL_ERR_SYS.
+ */
+QLIB_EXPORT ql_ret_t ql_net_addr_resolve(const char* host, ql_net_addr_t* out);
+
+/**
  * @brief Prepare the platform's socket layer.
  *
  * Windows requires `WSAStartup()` before any socket call; POSIX has no

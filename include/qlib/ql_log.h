@@ -53,6 +53,14 @@ extern "C"
  */
 #define QL_LOG_LINE_MAX 1024
 
+/**
+ * @brief Longest field set a thread can attach to one record, per rendering.
+ *
+ * Like QL_LOG_LINE_MAX, part of the format rather than a tuning knob: a field
+ * set that does not fit is truncated.
+ */
+#define QL_LOG_FIELDS_MAX 256
+
 /** @brief Ask the compiler to check printf-style arguments where it can. */
 #if defined(__GNUC__) || defined(__clang__)
 #  define QL_LOG_PRINTF(fmt_index, arg_index) __attribute__((format(printf, fmt_index, arg_index)))
@@ -222,6 +230,48 @@ QLIB_EXPORT ql_ret_t ql_log_set_file(const char* path);
  * disables rotation, which is the default. @p backups below 1 becomes 1.
  */
 QLIB_EXPORT void ql_log_set_rotation(size_t max_bytes, int backups);
+
+/* ------------------------------------------------------------------------- */
+/* Structured fields                                                          */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Start a fresh field set for this thread, discarding any previous one.
+ *
+ * Fields belong to the **next record written by the same thread** and are
+ * cleared afterwards, whether that record was emitted or filtered out. They are
+ * thread-local, so two threads can build field sets at the same time without
+ * seeing each other's.
+ *
+ * ```c
+ * ql_log_fields_begin();
+ * ql_log_field_str("user", "alice");
+ * ql_log_field_int("attempt", 3);
+ * QL_LOG_WARN("login failed");     // carries both fields
+ * ```
+ */
+QLIB_EXPORT void ql_log_fields_begin(void);
+
+/**
+ * @brief Attach a string field.
+ *
+ * PLAIN renders `key=value`; JSON renders `"key":"value"` with the value
+ * escaped. @return QL_OK, QL_ERR_INVALID_ARG, or QL_ERR_OUT_OF_RANGE when the
+ * field set is full.
+ */
+QLIB_EXPORT ql_ret_t ql_log_field_str(const char* key, const char* value);
+
+/** @brief Attach a signed integer field; JSON renders it as a number. */
+QLIB_EXPORT ql_ret_t ql_log_field_int(const char* key, long long value);
+
+/** @brief Attach an unsigned integer field; JSON renders it as a number. */
+QLIB_EXPORT ql_ret_t ql_log_field_uint(const char* key, unsigned long long value);
+
+/** @brief Attach a boolean field; JSON renders `true` or `false`. */
+QLIB_EXPORT ql_ret_t ql_log_field_bool(const char* key, bool value);
+
+/** @brief Attach a floating point field with @p precision decimal places. */
+QLIB_EXPORT ql_ret_t ql_log_field_double(const char* key, double value, int precision);
 
 /* ------------------------------------------------------------------------- */
 /* Asynchronous logging                                                       */

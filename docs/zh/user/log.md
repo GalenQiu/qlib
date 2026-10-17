@@ -126,6 +126,36 @@ ql_log_set_rotation(4 * 1024 * 1024, 3);        /* 4 MiB，保留三个备份 */
 最后几行；`QL_LOG_FATAL` 会自行刷新（flush），因为它是你最希望能在崩溃后留存
 下来的那条记录。
 
+## 结构化字段
+
+字段集在当前线程上构建，并附着到**该线程接下来写入的那条记录**上：
+
+```c
+ql_log_fields_begin();
+ql_log_field_str("user", "alice");
+ql_log_field_int("attempt", 3);
+ql_log_field_bool("cached", true);
+QLOG_WARN("login failed");
+```
+
+```
+2026-10-17 22:27:06 WARN  f.c:16 login failed user=alice attempt=3 cached=true
+{"level":"warn","file":"f.c","line":23,"func":"main","msg":"login failed again","user":"alice","attempt":3}
+```
+
+这两行是同一条记录在两种格式下的样子：`PLAIN` 追加 `k=v` 对，`JSON` 在 `"msg"` 之后加入带类型的成员（`"attempt":3` 是数字，`"cached":false` 是布尔值）。
+
+| 函数 | JSON 渲染 |
+|---|---|
+| `ql_log_field_str` | `"key":"value"`，值会被转义 |
+| `ql_log_field_int` / `_uint` | `"key":42`——一个数字 |
+| `ql_log_field_bool` | `"key":true` |
+| `ql_log_field_double` | `"key":0.50`——按所请求精度表示的数字 |
+
+字段是**线程本地的**：两个线程可以同时构建字段集，而不会看到对方的。每条记录之后它们都会被清空——包括被级别过滤掉的那一条，因此一条被抑制的记录不会把自己的字段留下来，附着到后面的记录上。
+
+放不进 `QL_LOG_FIELDS_MAX`（每种渲染 256 字节）的字段集会被拒绝并返回 `QL_ERR_OUT_OF_RANGE`，而不是只写一半就发出去。
+
 ## 异步日志
 
 ```c

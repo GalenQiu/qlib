@@ -217,6 +217,35 @@ server read 4 bytes
 Listening on port 0 and reading the port back is how a test gets a port without
 hard-coding one, and it is what the module's own tests do.
 
+### Looking up a name
+
+```c
+ql_net_addr_t addr;
+
+if (ql_net_addr_resolve("example.com", &addr) != QL_OK) {
+    /* the name did not resolve */
+}
+if (ql_net_tcp_connect(NULL, &addr, 443, &client) != QL_OK) {
+    /* ... */
+}
+```
+
+`ql_net_addr_resolve()` goes through the platform resolver, so `/etc/hosts`, the
+DNS configuration and the platform's cache all apply. A numeric address is
+accepted and needs no lookup, which is also the only form that works with no
+network at all.
+
+Only IPv4 results are considered: a host with only AAAA records is reported as
+not found rather than connecting over a family this module does not implement.
+
+Resolution failures are answers, not faults:
+
+| Return | Meaning |
+|---|---|
+| `QL_ERR_NOT_FOUND` | The name does not resolve |
+| `QL_ERR_AGAIN` | The resolver is temporarily unable; retrying may work |
+| `QL_ERR_SYS` | Something else went wrong in the resolver |
+
 ### Three rules that are easy to get wrong
 
 **A short send is not an error.** The kernel may accept fewer bytes than you

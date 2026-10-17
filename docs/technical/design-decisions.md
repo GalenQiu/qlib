@@ -204,7 +204,9 @@ An expired condition-variable wait is `QL_ERR_TIMEOUT` on both platforms, but th
 
 *It requires the threading module.* `QLIB_BUILD_LOG` without `QLIB_BUILD_THREADS` is a configure error, because the logger takes a mutex. A logger that interleaves half-lines between threads is worse than no logger, and making the mutex optional would mean the safe configuration is the one nobody tests.
 
-*What was left out, and why.* Syslog and thread-local structured fields are still deferred: syslog would put the first `#ifdef` into a module that currently has none, and structured fields need thread-local storage that the threading module does not provide.
+*What was left out, and why.* Syslog is still deferred, and it is the only piece of the original library deliberately left out: adding it would put the first `#ifdef` into a module whose entire portability claim is that it has none.
+
+Structured fields were built once the threading module could provide thread-local storage. `QL_THREAD_LOCAL` is `_Thread_local` on any C11 compiler and `__declspec(thread)` on MSVC, whose standard spelling is recent; the fields are two small per-thread buffers, one for each rendering, because a field is formatted once when attached and appending it to a record is then a copy. The MSVC limitation -- a `__declspec(thread)` object in a DLL loaded with `LoadLibrary()` may not be initialised -- is documented where the macro is defined rather than discovered by a Windows user.
 
 Asynchronous logging was built, and its shape follows from the same reasoning as the rest. Producers format a record and copy it into a fixed-size queue, never waiting for I/O; when the queue is full the record is **dropped and counted**, because a logger that grows without bound turns a diagnostic into an out-of-memory failure. The queue has its own mutex, so a producer never waits for the writer's file I/O, and the writer never holds the queue mutex while taking the state mutex — that ordering is what keeps the two from deadlocking.
 

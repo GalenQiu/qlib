@@ -35,6 +35,25 @@ extern "C"
 {
 #endif
 
+/**
+ * @brief Storage-class specifier for thread-local objects.
+ *
+ * `_Thread_local` on anything with a C11 compiler; `__declspec(thread)` on
+ * MSVC, which supports the standard spelling only from recent versions.
+ *
+ * One limitation is worth knowing before relying on it: a `__declspec(thread)`
+ * object in a DLL loaded with `LoadLibrary()` at run time may not be
+ * initialised. That is a documented MSVC restriction, not a bug here, and it is
+ * why the only current user is the logger's per-thread field buffer -- where
+ * failing loudly would be better than silently sharing one buffer between
+ * threads.
+ */
+#ifdef _MSC_VER
+#  define QL_THREAD_LOCAL __declspec(thread)
+#else
+#  define QL_THREAD_LOCAL _Thread_local
+#endif
+
 /** @brief An opaque thread. */
 typedef struct ql_thread ql_thread_t;
 

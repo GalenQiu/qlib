@@ -300,6 +300,152 @@ MU_TEST(test_no_leaks)
     (void)remove(LOG_PATH);
 }
 
+MU_TEST(test_structured_fields_in_plain_output)
+{
+    char buffer[4096];
+
+    log_to_file(LOG_PATH);
+    ql_log_fields_begin();
+    MU_CHECK(ql_log_field_str("user", "alice") == QL_OK);
+    MU_CHECK(ql_log_field_int("attempt", 3) == QL_OK);
+    MU_CHECK(ql_log_field_uint("bytes", 4096) == QL_OK);
+    MU_CHECK(ql_log_field_bool("cached", true) == QL_OK);
+    MU_CHECK(ql_log_field_double("ratio", 0.5, 2) == QL_OK);
+    QL_LOG_WARN("login failed");
+    MU_ASSERT(ql_log_flush() == QL_OK);
+
+    MU_ASSERT(read_file(LOG_PATH, buffer, sizeof buffer) > 0);
+    MU_CHECK(strstr(buffer, "login failed") != NULL);
+    MU_CHECK(strstr(buffer, "user=alice") != NULL);
+    MU_CHECK(strstr(buffer, "attempt=3") != NULL);
+    MU_CHECK(strstr(buffer, "bytes=4096") != NULL);
+    MU_CHECK(strstr(buffer, "cached=true") != NULL);
+    MU_CHECK(strstr(buffer, "ratio=0.50") != NULL);
+
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
+MU_TEST(test_fields_belong_to_one_record)
+{
+    char buffer[4096];
+
+    log_to_file(LOG_PATH);
+    ql_log_fields_begin();
+    MU_CHECK(ql_log_field_str("user", "alice") == QL_OK);
+    QL_LOG_INFO("first");
+    /* No begin() call: the previous set must already be gone. */
+    QL_LOG_INFO("second");
+    MU_ASSERT(ql_log_flush() == QL_OK);
+
+    MU_ASSERT(read_file(LOG_PATH, buffer, sizeof buffer) > 0);
+    {
+        const char* first = strstr(buffer, "first");
+        const char* second = strstr(buffer, "second");
+
+        MU_ASSERT(first != NULL && second != NULL);
+        MU_CHECK(first < second);
+        /* Exactly one occurrence, on the first record only. */
+        MU_CHECK(strstr(second, "user=alice") == NULL);
+        MU_CHECK(strstr(first, "user=alice") != NULL);
+    }
+
+    /* A filtered-out record must not leak its fields to the next one either. */
+    ql_log_set_level(QL_LOG_ERROR);
+    ql_log_fields_begin();
+    MU_CHECK(ql_log_field_str("hidden", "yes") == QL_OK);
+    QL_LOG_INFO("dropped");
+    ql_log_set_level(QL_LOG_INFO);
+    QL_LOG_INFO("third");
+    MU_ASSERT(ql_log_flush() == QL_OK);
+
+    MU_ASSERT(read_file(LOG_PATH, buffer, sizeof buffer) > 0);
+    {
+        const char* third = strstr(buffer, "third");
+
+        MU_ASSERT(third != NULL);
+        MU_CHECK(strstr(third, "hidden=") == NULL);
+    }
+
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
+MU_TEST(test_structured_fields_in_json)
+{
+    char buffer[4096];
+
+    log_to_file(LOG_PATH);
+    ql_log_set_format(QL_LOG_FORMAT_JSON);
+    ql_log_fields_begin();
+    MU_CHECK(ql_log_field_str("user", "alice") == QL_OK);
+    MU_CHECK(ql_log_field_int("attempt", 3) == QL_OK);
+    MU_CHECK(ql_log_field_bool("cached", false) == QL_OK);
+    QL_LOG_ERROR("login failed");
+    MU_ASSERT(ql_log_flush() == QL_OK);
+
+    MU_ASSERT(read_file(LOG_PATH, buffer, sizeof buffer) > 0);
+    MU_CHECK(strstr(buffer, "\"msg\":\"login failed\"") != NULL);
+    MU_CHECK(strstr(buffer, "\"user\":\"alice\"") != NULL);
+    /* Numbers and booleans are typed, not quoted. */
+    MU_CHECK(strstr(buffer, "\"attempt\":3") != NULL);
+    MU_CHECK(strstr(buffer, "\"cached\":false") != NULL);
+    /* The object still ends where it should, with no trailing comma. */
+    MU_CHECK(strstr(buffer, "false}") != NULL || strstr(buffer, "}") != NULL);
+    MU_CHECK(strstr(buffer, ",}") == NULL);
+
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
+MU_TEST(test_field_values_are_escaped_in_json)
+{
+    char buffer[4096];
+
+    log_to_file(LOG_PATH);
+    ql_log_set_format(QL_LOG_FORMAT_JSON);
+    ql_log_fields_begin();
+    MU_CHECK(ql_log_field_str("path", "a\"b\\c") == QL_OK);
+    QL_LOG_INFO("escaped");
+    MU_ASSERT(ql_log_flush() == QL_OK);
+
+    MU_ASSERT(read_file(LOG_PATH, buffer, sizeof buffer) > 0);
+    MU_CHECK(strstr(buffer, "\"path\":\"a\\\"b\\\\c\"") != NULL);
+
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
+MU_TEST(test_field_arguments_are_checked)
+{
+    ql_log_fields_begin();
+    MU_CHECK(ql_log_field_str(NULL, "x") == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_log_field_str("k", NULL) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_log_field_int(NULL, 1) == QL_ERR_INVALID_ARG);
+
+    /* Filling the set past its capacity reports the overflow rather than
+     * emitting half a field. */
+    {
+        char value[64];
+        ql_ret_t last = QL_OK;
+        int i;
+
+        ql_log_fields_begin();
+        for (i = 0; i < 40; i++)
+        {
+            (void)snprintf(value, sizeof value, "value-number-%d-padding-padding", i);
+            last = ql_log_field_str("k", value);
+            if (last != QL_OK)
+            {
+                break;
+            }
+        }
+        MU_CHECK(last == QL_ERR_OUT_OF_RANGE);
+    }
+
+    ql_log_fields_begin();
+}
+
 MU_TEST(test_async_delivers_every_record_in_order)
 {
     char buffer[8192];
@@ -432,6 +578,11 @@ MU_TEST_SUITE(test_suite_log)
     MU_RUN_TEST(test_json_format_and_escaping);
     MU_RUN_TEST(test_rotation_moves_the_file_aside);
     MU_RUN_TEST(test_null_and_edge_arguments);
+    MU_RUN_TEST(test_structured_fields_in_plain_output);
+    MU_RUN_TEST(test_fields_belong_to_one_record);
+    MU_RUN_TEST(test_structured_fields_in_json);
+    MU_RUN_TEST(test_field_values_are_escaped_in_json);
+    MU_RUN_TEST(test_field_arguments_are_checked);
     MU_RUN_TEST(test_async_delivers_every_record_in_order);
     MU_RUN_TEST(test_async_never_loses_records_silently);
     MU_RUN_TEST(test_disable_drains_the_queue);

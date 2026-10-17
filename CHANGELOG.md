@@ -34,17 +34,18 @@ frozen.
 - `ql_vector` — an opaque, growable, contiguous array, with an aliasing guard
   that makes `ql_vector_push_back(v, ql_vector_at(v, 0))` defined behaviour.
 - `ql_log` *(optional)* — levels with runtime filtering and compile-time
-  stripping, plain/raw/JSON output with JSON escaping, and console and
-  rotating-file sinks. A singleton with fixed-size records, both deliberate; it
+  stripping, plain/raw/JSON output with JSON escaping, thread-local structured
+  fields, console and rotating-file sinks, and an asynchronous mode with a
+  bounded queue. A singleton with fixed-size records, both deliberate; it
   requires the threading module so that a shared logger cannot interleave
   half-lines. Asynchronous logging, syslog and structured fields are not in it.
 - `ql_thread` *(optional)* — `ql_thread_t`, `ql_mutex_t` and `ql_cond_t` over
   `pthread` and the Win32 equivalents. The first part of the library that is not
   plain C11, and the second link dependency (`Threads::Threads`).
 - `ql_net` *(optional)* — `ql_net_addr_t` and textual IPv4 parsing, formatting
-  and comparison; plus `ql_net_socket_t` and blocking IPv4 TCP sockets
-  (`listen`, `connect`, `accept`, `send`, `recv`, timeouts). No DNS, no
-  non-blocking I/O, no IPv6 sockets. The only link dependency in the library:
+  and comparison; name resolution via `getaddrinfo`; plus `ql_net_socket_t` and
+  blocking IPv4 TCP sockets (`listen`, `connect`, `accept`, `send`, `recv`,
+  timeouts). No non-blocking I/O and no IPv6 sockets. The only link dependency in the library:
   `ws2_32` on Windows, and only when the module is built.
 
 #### Build
@@ -62,7 +63,7 @@ frozen.
 
 - A minunit harness with a self-check (`tests/selftest/`) that fails when the
   harness itself stops reporting failures.
-- 140 unit tests with the threading and logging modules, 125 with threads but no logger, 116 on the default build, and 95 with the network module disabled.
+- 147 unit tests with the threading and logging modules, 127 with threads but no logger, 118 on the default build, and 95 with the network module disabled.
 - Six libFuzzer targets: `fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
 - Sixteen micro-benchmark cases across the containers, memory and address handling.
 - `ci/check.sh`, running the whole local matrix in eleven steps and

@@ -370,6 +370,49 @@ static ql_net_socket_t* make_listener(uint16_t* out_port)
     return listener;
 }
 
+MU_TEST(test_resolve_numeric_and_local_names)
+{
+    ql_net_addr_t addr;
+    ql_net_addr_t expected;
+    unsigned char loopback[4] = {127, 0, 0, 1};
+
+    /* A numeric address needs no lookup at all. */
+    MU_ASSERT(ql_net_addr_resolve("127.0.0.1", &addr) == QL_OK);
+    MU_CHECK(addr.family == QL_NET_AF_INET);
+    MU_CHECK(memcmp(addr.bytes, loopback, 4) == 0);
+
+    /* "localhost" comes from the hosts file, so this needs no network either. */
+    MU_ASSERT(ql_net_addr_resolve("localhost", &addr) == QL_OK);
+    MU_CHECK(addr.family == QL_NET_AF_INET);
+    MU_ASSERT(ql_net_addr_parse("127.0.0.1", &expected) == QL_OK);
+    MU_CHECK(ql_net_addr_equal(&addr, &expected));
+
+    MU_CHECK(ql_net_addr_resolve(NULL, &addr) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_addr_resolve("", &addr) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_addr_resolve("localhost", NULL) == QL_ERR_INVALID_ARG);
+}
+
+MU_TEST(test_connect_by_resolved_name)
+{
+    ql_net_socket_t* listener;
+    ql_net_socket_t* client = NULL;
+    ql_net_socket_t* server = NULL;
+    ql_net_addr_t resolved;
+    uint16_t port = 0;
+
+    listener = make_listener(&port);
+    MU_ASSERT(listener != NULL);
+
+    /* The point of resolving: the result has to be usable as an address. */
+    MU_ASSERT(ql_net_addr_resolve("localhost", &resolved) == QL_OK);
+    MU_ASSERT(ql_net_tcp_connect(NULL, &resolved, port, &client) == QL_OK);
+    MU_ASSERT(ql_net_accept(listener, &server) == QL_OK);
+
+    ql_net_socket_close(server);
+    ql_net_socket_close(client);
+    ql_net_socket_close(listener);
+}
+
 MU_TEST(test_listen_picks_a_port)
 {
     ql_net_socket_t* listener;
@@ -588,6 +631,8 @@ MU_TEST_SUITE(test_suite_net)
     MU_RUN_TEST(test_format_rejects_bad_arguments_and_families);
     MU_RUN_TEST(test_equality);
     MU_RUN_TEST(test_failures_are_raised_not_just_returned);
+    MU_RUN_TEST(test_resolve_numeric_and_local_names);
+    MU_RUN_TEST(test_connect_by_resolved_name);
     MU_RUN_TEST(test_listen_picks_a_port);
     MU_RUN_TEST(test_loopback_round_trip);
     MU_RUN_TEST(test_recv_reports_a_closed_peer_as_zero_bytes);

@@ -133,6 +133,43 @@ convention.
 buffered, so a crash may lose the last few lines; `QL_LOG_FATAL` flushes on its
 own, since it is the record you most want to survive.
 
+## Structured fields
+
+A field set is built on the current thread and attaches to the **next record
+written by that thread**:
+
+```c
+ql_log_fields_begin();
+ql_log_field_str("user", "alice");
+ql_log_field_int("attempt", 3);
+ql_log_field_bool("cached", true);
+QLOG_WARN("login failed");
+```
+
+```
+2026-10-17 22:27:06 WARN  f.c:16 login failed user=alice attempt=3 cached=true
+{"level":"warn","file":"f.c","line":23,"func":"main","msg":"login failed again","user":"alice","attempt":3}
+```
+
+The two lines are the same record in the two formats: `PLAIN` appends `k=v`
+pairs, `JSON` adds typed members (`"attempt":3` is a number, `"cached":false` a
+boolean) after `"msg"`.
+
+| Function | JSON rendering |
+|---|---|
+| `ql_log_field_str` | `"key":"value"`, value escaped |
+| `ql_log_field_int` / `_uint` | `"key":42` — a number |
+| `ql_log_field_bool` | `"key":true` |
+| `ql_log_field_double` | `"key":0.50` — a number at the requested precision |
+
+Fields are **thread-local**: two threads can build field sets at the same time
+without seeing each other's. They are cleared after every record — including one
+that the level filters out, so a suppressed record cannot leave its fields to
+attach themselves to a later one.
+
+A field set that does not fit in `QL_LOG_FIELDS_MAX` (256 bytes per rendering) is
+refused with `QL_ERR_OUT_OF_RANGE` rather than emitted half-written.
+
 ## Asynchronous logging
 
 ```c

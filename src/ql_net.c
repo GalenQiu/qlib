@@ -1,3 +1,16 @@
+/*
+ * Ask the C library to expose its POSIX 2008 declarations, which is what
+ * getaddrinfo() needs. This is not a compiler extension and does not change the
+ * dialect -- the build still passes -std=c11 -- it only decides which
+ * declarations the system headers make visible. Windows ignores it entirely.
+ */
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+/* The name is POSIX's, not ours: the standard requires this exact reserved
+ * identifier to select the declaration set. */
+// NOLINTNEXTLINE(bugprone-reserved-identifier, cert-dcl37-c, cert-dcl51-cpp) -- required by POSIX
+#  define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "qlib/ql_net.h"
 
 #include "ql_internal.h"
@@ -39,6 +52,7 @@ typedef int ql_net_io_result_t;
 #  define QL_NET_IO_LEN(x) ((int)(x))
 #else
 #  include <arpa/inet.h>
+#  include <netdb.h>
 #  include <netinet/in.h>
 #  include <sys/socket.h>
 #  include <sys/time.h>
@@ -290,6 +304,81 @@ ql_ret_t ql_net_init(void)
 #endif
 
     g_net_started = true;
+    return QL_OK;
+}
+
+/** @brief Map a getaddrinfo() result code onto ql_ret_t. */
+static ql_ret_t ql_net_resolve_error(int code)
+{
+    /* The EAI_* values differ between platforms, so they are compared by name
+     * rather than by number. */
+    if (code == EAI_NONAME || code == EAI_FAIL)
+    {
+        return QL_ERR_NOT_FOUND;
+    }
+    if (code == EAI_AGAIN)
+    {
+        return QL_ERR_AGAIN;
+    }
+    if (code == EAI_MEMORY)
+    {
+        return QL_ERR_NOMEM;
+    }
+    return QL_ERR_SYS;
+}
+
+ql_ret_t ql_net_addr_resolve(const char* host, ql_net_addr_t* out)
+{
+    struct addrinfo hints;
+    struct addrinfo* results = NULL;
+    ql_ret_t rc;
+    int status;
+
+    if (host == NULL || out == NULL || host[0] == '\0')
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_resolve: host or out is NULL, or host is empty");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    rc = ql_net_init();
+    if (rc != QL_OK)
+    {
+        return rc;
+    }
+
+    memset(&hints, 0, sizeof hints);
+    /* IPv4 only: this module has no IPv6 sockets, and returning an address it
+     * cannot connect to would only move the failure somewhere less clear. */
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    status = getaddrinfo(host, NULL, &hints, &results);
+    if (status != 0)
+    {
+        ql_ret_t code = ql_net_resolve_error(status);
+
+        if (code == QL_ERR_NOT_FOUND)
+        {
+            /* A name that does not resolve is an answer, not a fault. */
+            freeaddrinfo(results);
+            return code;
+        }
+        ql_err_raise(code, "ql_net_addr_resolve: getaddrinfo failed");
+        freeaddrinfo(results);
+        return code;
+    }
+
+    if (results == NULL || results->ai_addr == NULL)
+    {
+        freeaddrinfo(results);
+        return QL_ERR_NOT_FOUND;
+    }
+
+    memset(out, 0, sizeof *out);
+    out->family = QL_NET_AF_INET;
+    memcpy(out->bytes, &((const struct sockaddr_in*)(void*)results->ai_addr)->sin_addr, 4);
+
+    freeaddrinfo(results);
     return QL_OK;
 }
 
