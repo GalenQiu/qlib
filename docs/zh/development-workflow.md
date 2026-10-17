@@ -18,12 +18,12 @@
 |---|---|
 | 版本 | `0.1.0`（`SOVERSION 0`） |
 | 语言标准 | **恰好 C11，禁用编译器扩展**（`-std=c11`，不是 `gnu11`） |
-| 模块 | `ql_common`（错误/版本）、`ql_mem`（分配器）、`ql_str`（字符串）、`ql_hash`（哈希表）、`ql_list`（双向链表）、`ql_vector`（动态数组）、`ql_net`（IPv4 地址，可选） |
-| 公开头文件 | `ql_common.h`、`ql_mem.h`、`ql_str.h`、`ql_hash.h`、`ql_list.h`、`ql_vector.h`、`ql_net.h`、`qlib.h`（伞形） |
-| 单元测试 | **115 个**（关闭网络模块时 95 个） |
+| 模块 | `ql_common`（错误/版本）、`ql_mem`（分配器）、`ql_str`（字符串）、`ql_hash`（哈希表）、`ql_list`（双向链表）、`ql_vector`（动态数组）、`ql_thread`（线程，可选）、`ql_net`（IPv4 与 TCP，可选） |
+| 公开头文件 | `ql_common.h`、`ql_mem.h`、`ql_str.h`、`ql_hash.h`、`ql_list.h`、`ql_vector.h`、`ql_thread.h`、`ql_net.h`、`qlib.h`（伞形） |
+| 单元测试 | 默认 **116 个**，启用线程 **125 个**，关闭网络模块 **95 个** |
 | 模糊测试目标 | 6 个（`fuzz_str`、`fuzz_hash`、`fuzz_list`、`fuzz_vector`、`fuzz_mem`、`fuzz_net`） |
 | 基准测试用例 | 16 个 |
-| 本地验证 | `./ci/check.sh`，**11 个步骤** |
+| 本地验证 | `./ci/check.sh`，**12 个步骤** |
 | CI | GitHub Actions，**9 个 job 定义 → 一次运行 11 个 job**（`linux` 和 `windows` 是矩阵） |
 | 远端 | `origin` = Gitee（主），`github` = GitHub 镜像 |
 

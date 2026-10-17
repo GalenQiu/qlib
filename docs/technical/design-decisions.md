@@ -173,3 +173,19 @@ Nothing here adds a dependency. `ql_hash` implements FNV-1a inline rather than l
 **Consequences.** The address half still needs no network, no initialisation and no library, so `QLIB_BUILD_NET` remains a source-level toggle and the address tests remain hermetic. The socket half is tested on loopback without a peer thread: the kernel completes a connection into the listener's backlog before `accept()` is called, so connect-then-accept-then-send-then-recv is deterministic in a single thread as long as the order is respected and a timeout is set. That is a real test, not a mock, and it caught two contract violations while being written.
 
 Two costs are documented rather than hidden. First, an expired receive timeout is reported as `QL_ERR_AGAIN`, not `QL_ERR_TIMEOUT`, because that is what Linux and macOS return for an expired `SO_RCVTIMEO` and it cannot be told apart from a full buffer without a `poll()` layer. Second, a caller that wants IPv6, DNS or concurrency has to bring those itself; the module says so instead of pretending they are coming for free.
+
+---
+
+## ADR-17: A threading layer of our own, rather than C11 `<threads.h>` or nothing
+
+**Context.** Two earlier decisions kept hitting the same wall. ADR-16 made sockets blocking because non-blocking I/O needs a thread or an event loop, and qlib had neither. The same gap blocks an asynchronous log sink. Three ways out were on the table: require C11 `<threads.h>`, tell callers to write their own `#ifdef`s, or build a small portability layer.
+
+**Decision.** A portability layer: `ql_thread`, `ql_mutex_t` and `ql_cond_t` over `pthread` and the Win32 equivalents, behind the optional `QLIB_BUILD_THREADS` because it is the library's second link dependency. `<threads.h>` was rejected because **macOS does not ship it** -- the platform is one of the three this library claims, and a C11 feature it omits is not available to us however standard it is. Pushing the `#ifdef`s onto callers was rejected because the same twenty lines of Windows-versus-POSIX boilerplate would then exist once per caller, each version tested only by whoever wrote it.
+
+All three types are opaque handles rather than embeddable values. An embedded `ql_mutex_t` would have to reserve space for whichever platform type is largest: `pthread_mutex_t` and `CRITICAL_SECTION` have no portable size, so the struct would either waste memory everywhere or silently corrupt memory on one platform. A handle moves that risk into the library, where one implementation covers every caller. The cost is one allocation per synchronisation object.
+
+**Consequences.** The Windows implementation is the first in the library that could not be compiled locally at all -- `_beginthreadex`, `CRITICAL_SECTION` and `CONDITION_VARIABLE` are verified only by CI. That is the honest position: the alternative was not having a threading layer. It is also why the Windows jobs now build with `QLIB_BUILD_THREADS=ON`, and why the local check runs the module under ThreadSanitizer when clang is present.
+
+Building the module found two bugs that a plain run would not have. The first was a real use-after-free: the thread's start context lived in the same allocation as the handle, so `ql_thread_detach()` freed memory the trampoline had not read yet -- ASAN caught it. It is now two allocations with one owner each. The second was in the test: the leak check read a shared counter while a thread was still running, which ThreadSanitizer correctly called a data race.
+
+An expired condition-variable wait is `QL_ERR_TIMEOUT` on both platforms, but the POSIX side had to use `timespec_get` rather than `clock_gettime`: the latter is POSIX.1b and stays hidden under `-std=c11`, which is the dialect qlib builds in.

@@ -174,3 +174,30 @@ Without it the header expands `QLIB_EXPORT` to `__declspec(dllimport)` and the l
 | MSVC | `/fsanitize=address` only |
 
 MSVC ships AddressSanitizer but has no UndefinedBehaviorSanitizer, so `QLIB_SANITIZE` there is weaker than on the other two platforms. On Linux, ASAN also brings LeakSanitizer, which is why the CI job is described as `asan+ubsan` and catches leaks without extra configuration.
+
+## Threads
+
+`ql_thread` is the only part of the library that is not plain C11, and it is
+optional (`QLIB_BUILD_THREADS`). The split it hides:
+
+| Concept | POSIX | Windows |
+|---|---|---|
+| Thread | `pthread_t`, `pthread_create` | `_beginthreadex` |
+| Mutex | `pthread_mutex_t` | `CRITICAL_SECTION` |
+| Condition variable | `pthread_cond_t` | `CONDITION_VARIABLE` |
+| Timed wait | `pthread_cond_timedwait` | `SleepConditionVariableCS` |
+| CPU count | `sysconf(_SC_NPROCESSORS_ONLN)` | `GetSystemInfo` |
+
+Two details are worth knowing:
+
+**`_beginthreadex`, not `CreateThread`.** A thread that runs C runtime code has
+to let the CRT set up and tear down its per-thread state; `CreateThread` skips
+that and leaks it.
+
+**`timespec_get`, not `clock_gettime`.** The latter is POSIX.1b and is hidden
+under `-std=c11`, which is exactly the dialect this library builds in. C11's
+`timespec_get(TIME_UTC)` gives the same wall clock that a default
+`pthread_cond_timedwait` measures against.
+
+The Windows implementation is verified by CI only; it cannot be compiled on the
+development machine. See [ADR-17](design-decisions.md).

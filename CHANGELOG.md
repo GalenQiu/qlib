@@ -33,6 +33,9 @@ frozen.
   nodes come and go, giving constant time removal from anywhere.
 - `ql_vector` — an opaque, growable, contiguous array, with an aliasing guard
   that makes `ql_vector_push_back(v, ql_vector_at(v, 0))` defined behaviour.
+- `ql_thread` *(optional)* — `ql_thread_t`, `ql_mutex_t` and `ql_cond_t` over
+  `pthread` and the Win32 equivalents. The first part of the library that is not
+  plain C11, and the second link dependency (`Threads::Threads`).
 - `ql_net` *(optional)* — `ql_net_addr_t` and textual IPv4 parsing, formatting
   and comparison; plus `ql_net_socket_t` and blocking IPv4 TCP sockets
   (`listen`, `connect`, `accept`, `send`, `recv`, timeouts). No DNS, no
@@ -54,7 +57,7 @@ frozen.
 
 - A minunit harness with a self-check (`tests/selftest/`) that fails when the
   harness itself stops reporting failures.
-- 115 unit tests, and 95 when the optional network module is disabled.
+- 116 unit tests on the default build, 125 with the threading module enabled, and 95 with the network module disabled.
 - Six libFuzzer targets: `fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
 - Sixteen micro-benchmark cases across the containers, memory and address handling.
 - `ci/check.sh`, running the whole local matrix in eleven steps and
@@ -80,11 +83,11 @@ analysis.
 
 - `ql_net` handles IPv4 only. IPv6 text is reported as `QL_ERR_NOT_SUPPORTED`
   rather than mis-parsed, and `ql_net_addr_t` already has room for it.
-- There is no concurrency support: no threads, no locks. `ql_lock_t` was
-  removed rather than left as an unimplemented promise, because macOS has no
-  C11 `<threads.h>` and a POSIX+Win32 implementation needs testing on both.
-  This is also why sockets are blocking: an asynchronous API needs either a
-  thread or an event loop to have a testing story at all.
+- Concurrency is opt-in (`QLIB_BUILD_THREADS`) and minimal: threads, a mutex and
+  a condition variable. No thread pool, no read-write lock, no atomics. Sockets
+  are still blocking, and there is still no asynchronous API -- the threading
+  layer is what would make one possible, not the async API itself.
+- C11 `<threads.h>` is not used, because macOS does not ship it.
 - `ql_allocator_t`'s `realloc` takes only `(ptr, size, userdata)`, so it cannot
   use the old size. Callers needing a realloc that knows the old size should
   allocate-copy-free.

@@ -26,6 +26,7 @@ qlib/qlib.h                     伞形头文件：包含下面每一个公共头
 ├── ql_list.h                   → ql_common.h、ql_mem.h
 ├── ql_vector.h                 → ql_common.h、ql_mem.h
 └── ql_net.h                    → ql_common.h、ql_mem.h  （可选模块）
+    ql_thread.h                 → ql_common.h、ql_mem.h  （可选模块）
 
 src/ql_internal.h               私有，不安装
 ├── ql_common.c                 定义 ql_err_raise()
@@ -47,6 +48,7 @@ src/ql_internal.h               私有，不安装
 | `ql_str` | `ql_str_t`、维持其 NUL 结尾的增长策略，以及追加与格式化路径 | 其他一概不管：它只存字节，不了解任何文本编码。 |
 | `ql_hash` | `ql_hash_t`、FNV-1a 哈希、探测与墓碑策略，以及重哈希 | 键的含义。它用 `memcmp` 比较字节，所以带填充字节的结构体键是调用方自己的问题。 |
 | `ql_list` | `ql_list_t`、`ql_list_node_t`，以及链接、解链与节点分配 | 稳定句柄正是它的价值；需要按下标访问的场合应该用 `ql_vector`。 |
+| `ql_thread` | `ql_thread_t`、`ql_mutex_t`、`ql_cond_t`，以及它们背后的 POSIX/Windows 分野 | 调度策略、线程池，以及任何无锁实现。 |
 | `ql_net` | `ql_net_addr_t` 与 `ql_net_family_t`、文本 IPv4 的解析、格式化与比较；`ql_net_socket_t` 及其上的 TCP 调用 | DNS、IPv6 socket，以及任何异步能力。地址那一半不分配内存；一个 socket 是一个控制块。 |
 
 两条规则保证分层不被破坏：
@@ -67,7 +69,8 @@ src/ql_internal.h               私有，不安装
 | [`ql_list.h`](../../../include/qlib/ql_list.h) | `<stdbool.h>`、`<stddef.h>`、`ql_common.h`、`ql_mem.h` | `ql_list_t`、`ql_list_node_t` |
 | [`ql_vector.h`](../../../include/qlib/ql_vector.h) | `<stdbool.h>`、`<stddef.h>`、`ql_common.h`、`ql_mem.h` | `ql_vector_t` |
 | [`ql_net.h`](../../../include/qlib/ql_net.h) | `<stdbool.h>`、`<stddef.h>`、`<stdint.h>`、`ql_common.h`、`ql_mem.h` | `ql_net_addr_t`、`ql_net_socket_t`、地址处理与 TCP socket |
-| [`qlib.h`](../../../include/qlib/qlib.h) | 上述全部，其中 `ql_net.h` 仅在定义了 `QLIB_HAS_NET` 时包含 | 伞形便利头文件 |
+| [`ql_thread.h`](../../../include/qlib/ql_thread.h) | `<stdbool.h>`、`<stddef.h>`、`ql_common.h`、`ql_mem.h` | `ql_thread_t`、`ql_mutex_t`、`ql_cond_t` |
+| [`qlib.h`](../../../include/qlib/qlib.h) | 上述全部，其中 `ql_net.h` 与 `ql_thread.h` 仅在定义了各自的 `QLIB_HAS_*` 宏时包含 | 伞形便利头文件 |
 
 `ql_net.h` 是可选的：配置为 `QLIB_BUILD_NET=OFF` 的构建既不编译它的源文件，也不安装它，伞形头文件里的条件包含正是为此。机制见[构建系统](build-system.md)。
 

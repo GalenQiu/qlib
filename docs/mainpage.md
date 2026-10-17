@@ -25,7 +25,8 @@ The library is built around three ideas:
 | String | `ql_str.h` | `ql_str_t`, a growable, always NUL terminated byte string |
 | Hash table | `ql_hash.h` | `ql_hash_t`, fixed size keys to fixed size values |
 | Linked list | `ql_list.h` | `ql_list_t`, doubly linked with stable node handles |
-| Network | `ql_net.h` | IPv4 address parsing, formatting and comparison (optional module) |
+| Threads | `ql_thread.h` | threads, mutexes and condition variables (optional module) |
+| Network | `ql_net.h` | IPv4 address handling and TCP sockets (optional module) |
 | Umbrella | `qlib.h` | includes all of the above |
 
 ## Where to read more
@@ -40,6 +41,7 @@ User documentation:
 - [Strings](user/string.md)
 - [Hash table](user/hash.md)
 - [Linked list](user/list.md)
+- [Threads](user/thread.md)
 - [Network addresses](user/net.md)
 
 Technical documentation:

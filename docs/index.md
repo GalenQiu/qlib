@@ -36,6 +36,7 @@ python3 ci/check_links.py
 7. [Strings](user/string.md) — the growable, always-terminated string
 8. [Hash table](user/hash.md) — fixed size keys to fixed size values
 9. [Linked list](user/list.md) — stable node handles and constant time removal
+10. [Threads](user/thread.md) — threads, mutexes and condition variables
 
 ## Technical documentation
 

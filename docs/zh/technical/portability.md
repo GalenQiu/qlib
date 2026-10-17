@@ -146,3 +146,29 @@ cl /DQLIB_STATIC_DEFINE /I<prefix>\include app.c <prefix>\lib\qlib.lib
 | MSVC | 仅 `/fsanitize=address` |
 
 MSVC 自带 AddressSanitizer，但没有 UndefinedBehaviorSanitizer，因此那里的 `QLIB_SANITIZE` 弱于另外两个平台。在 Linux 上，ASAN 还会带来 LeakSanitizer，所以那个 CI job 被称为 `asan+ubsan`，并且无需额外配置就能捕获泄漏。
+
+## 线程
+
+`ql_thread` 是本库中唯一不属于纯 C11 的部分，而且它是可选的
+（`QLIB_BUILD_THREADS`）。它隐藏起来的分野是：
+
+| 概念 | POSIX | Windows |
+|---|---|---|
+| 线程 | `pthread_t`、`pthread_create` | `_beginthreadex` |
+| 互斥量 | `pthread_mutex_t` | `CRITICAL_SECTION` |
+| 条件变量 | `pthread_cond_t` | `CONDITION_VARIABLE` |
+| 定时等待 | `pthread_cond_timedwait` | `SleepConditionVariableCS` |
+| CPU 数量 | `sysconf(_SC_NPROCESSORS_ONLN)` | `GetSystemInfo` |
+
+有两个细节值得知道：
+
+**用 `_beginthreadex`，而不是 `CreateThread`。** 执行 C 运行时代码的线程必须
+让 CRT 完成其每线程状态的初始化与销毁；`CreateThread` 跳过了这一步，会泄漏
+这些状态。
+
+**用 `timespec_get`，而不是 `clock_gettime`。** 后者属于 POSIX.1b，在
+`-std=c11` 下是隐藏的，而这恰恰是本库构建所用的方言。C11 的
+`timespec_get(TIME_UTC)` 提供的墙钟时间，与默认 `pthread_cond_timedwait`
+所依据的是同一种。
+
+Windows 实现仅由 CI 验证；它无法在开发机上编译。见 [ADR-17](design-decisions.md)。

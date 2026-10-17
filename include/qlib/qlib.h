@@ -23,4 +23,8 @@
 #  include "qlib/ql_net.h"
 #endif
 
+#ifdef QLIB_HAS_THREADS
+#  include "qlib/ql_thread.h"
+#endif
+
 #endif /* QLIB_QLIB_H */

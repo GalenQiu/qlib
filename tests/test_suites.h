@@ -19,4 +19,8 @@ MU_DECLARE_SUITE(test_suite_vector);
 MU_DECLARE_SUITE(test_suite_net);
 #endif
 
+#ifdef QLIB_HAS_THREADS
+MU_DECLARE_SUITE(test_suite_thread);
+#endif
+
 #endif /* QLIB_TEST_SUITES_H */

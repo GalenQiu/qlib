@@ -20,12 +20,12 @@ of the build system see [Build system](technical/build-system.md).
 |---|---|
 | Version | `0.1.0` (`SOVERSION 0`) |
 | Language standard | **Exactly C11, compiler extensions disabled** (`-std=c11`, not `gnu11`) |
-| Modules | `ql_common` (errors/version), `ql_mem` (allocator), `ql_str` (string), `ql_hash` (hash table), `ql_list` (linked list), `ql_vector` (dynamic array), `ql_net` (IPv4 addresses, optional) |
-| Public headers | `ql_common.h`, `ql_mem.h`, `ql_str.h`, `ql_hash.h`, `ql_list.h`, `ql_vector.h`, `ql_net.h`, `qlib.h` (umbrella) |
-| Unit tests | **115** (95 with the network module off) |
+| Modules | `ql_common` (errors/version), `ql_mem` (allocator), `ql_str` (string), `ql_hash` (hash table), `ql_list` (linked list), `ql_vector` (dynamic array), `ql_thread` (threads, optional), `ql_net` (IPv4 and TCP, optional) |
+| Public headers | `ql_common.h`, `ql_mem.h`, `ql_str.h`, `ql_hash.h`, `ql_list.h`, `ql_vector.h`, `ql_thread.h`, `ql_net.h`, `qlib.h` (umbrella) |
+| Unit tests | **116** default, **125** with threads, **95** without the network module |
 | Fuzz targets | 6 (`fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`) |
 | Benchmark cases | 16 |
-| Local verification | `./ci/check.sh`, **11 steps** |
+| Local verification | `./ci/check.sh`, **12 steps** |
 | CI | GitHub Actions, **9 job definitions → 11 jobs per run** (`linux` and `windows` are matrices) |
 | Remotes | `origin` = Gitee (primary), `github` = GitHub mirror |
 

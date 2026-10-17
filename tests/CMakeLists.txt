@@ -22,6 +22,10 @@ if(QLIB_BUILD_NET)
     list(APPEND QLIB_TEST_SRC test_net.c)
 endif()
 
+if(QLIB_BUILD_THREADS)
+    list(APPEND QLIB_TEST_SRC test_thread.c)
+endif()
+
 add_executable(qlib_test ${QLIB_TEST_SRC})
 
 target_link_libraries(qlib_test PRIVATE qlib::qlib qlib_warnings)

@@ -29,6 +29,10 @@ option(QLIB_BUILD_FUZZ  "Build libFuzzer targets (Clang only)" OFF)
 # The network module is optional so that a build can drop it. It has no
 # link dependency, but "modular and optional components" is the promise.
 option(QLIB_BUILD_NET   "Build qlib network module"   ON)
+
+# Threads are optional because they are a link dependency (Threads::Threads).
+# Nothing else in the library needs them; the modules that do will say so.
+option(QLIB_BUILD_THREADS "Build the qlib threading module" OFF)
 option(QLIB_SHARED      "Build shared library"        OFF)
 option(QLIB_WERROR      "Treat compiler warnings as errors" OFF)
 option(QLIB_INSTALL     "Generate install and package config rules" ON)
@@ -117,6 +121,10 @@ if(QLIB_BUILD_NET)
     list(APPEND QLIB_SRC src/ql_net.c)
 endif()
 
+if(QLIB_BUILD_THREADS)
+    list(APPEND QLIB_SRC src/ql_thread.c)
+endif()
+
 if(QLIB_SHARED)
     add_library(qlib SHARED ${QLIB_SRC})
 else()
@@ -156,6 +164,22 @@ endif()
 # so a build without the module still has a working umbrella header. PUBLIC, so
 # it reaches anything linking qlib::qlib, and mirrored into qlib.pc below for
 # consumers that do not use CMake.
+if(QLIB_BUILD_THREADS)
+    target_compile_definitions(qlib PUBLIC QLIB_HAS_THREADS)
+    set(QLIB_PC_THREAD_DEFINES " -DQLIB_HAS_THREADS")
+    find_package(Threads REQUIRED)
+    # PUBLIC: a consumer of the static library needs the same flags.
+    target_link_libraries(qlib PUBLIC Threads::Threads)
+    if(NOT WIN32)
+        set(QLIB_PC_THREAD_LIBS " -pthread")
+    else()
+        set(QLIB_PC_THREAD_LIBS "")
+    endif()
+else()
+    set(QLIB_PC_THREAD_DEFINES "")
+    set(QLIB_PC_THREAD_LIBS "")
+endif()
+
 if(QLIB_BUILD_NET)
     target_compile_definitions(qlib PUBLIC QLIB_HAS_NET)
     set(QLIB_PC_DEFINES " -DQLIB_HAS_NET")
@@ -173,6 +197,10 @@ else()
     set(QLIB_PC_DEFINES "")
     set(QLIB_PC_LIBS "")
 endif()
+
+# Gather the optional defines and libraries for qlib.pc.
+set(QLIB_PC_DEFINES "${QLIB_PC_DEFINES}${QLIB_PC_THREAD_DEFINES}")
+set(QLIB_PC_LIBS "${QLIB_PC_THREAD_LIBS}${QLIB_PC_LIBS}")
 
 set_target_properties(qlib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
@@ -248,17 +276,19 @@ if(QLIB_INSTALL)
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
 
-    # The optional module's header is installed only when the module is built,
-    # so a disabled build cannot hand out a header whose symbols do not exist.
-    if(QLIB_BUILD_NET)
-        set(QLIB_NET_HEADER_RULE "")
-    else()
-        set(QLIB_NET_HEADER_RULE PATTERN "ql_net.h" EXCLUDE)
+    # An optional module's header is installed only when the module is built, so
+    # a disabled build cannot hand out a header whose symbols do not exist.
+    set(QLIB_OPTIONAL_HEADER_RULES "")
+    if(NOT QLIB_BUILD_NET)
+        list(APPEND QLIB_OPTIONAL_HEADER_RULES PATTERN "ql_net.h" EXCLUDE)
+    endif()
+    if(NOT QLIB_BUILD_THREADS)
+        list(APPEND QLIB_OPTIONAL_HEADER_RULES PATTERN "ql_thread.h" EXCLUDE)
     endif()
 
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/qlib"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-        FILES_MATCHING PATTERN "*.h" ${QLIB_NET_HEADER_RULE}
+        FILES_MATCHING PATTERN "*.h" ${QLIB_OPTIONAL_HEADER_RULES}
     )
 
     # The generated export header lives in the build tree, not the source tree.
