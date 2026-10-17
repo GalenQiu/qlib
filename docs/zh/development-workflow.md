@@ -30,7 +30,7 @@
 CI 徽章：
 
 ```markdown
-[![CI](https://github.com/qiugangsic/qlib/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/qiugangsic/qlib/actions/workflows/ci.yml)
+[![CI](https://github.com/GalenQiu/qlib/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/GalenQiu/qlib/actions/workflows/ci.yml)
 ```
 
 ---
@@ -136,11 +136,11 @@ git push github main       # GitHub（CI 在这里跑）
 
 ```bash
 # 看最近一次运行
-curl -sS "https://api.github.com/repos/qiugangsic/qlib/actions/runs?per_page=1" \
+curl -sS "https://api.github.com/repos/GalenQiu/qlib/actions/runs?per_page=1" \
   | python3 -c "import json,sys;d=json.load(sys.stdin)['workflow_runs'][0];print(d['status'],d['conclusion'],d['html_url'])"
 
 # 看每个 job
-curl -sS "https://api.github.com/repos/qiugangsic/qlib/actions/runs/<run_id>/jobs" \
+curl -sS "https://api.github.com/repos/GalenQiu/qlib/actions/runs/<run_id>/jobs" \
   | python3 -c "
 import json,sys
 for j in json.load(sys.stdin)['jobs']:
@@ -150,7 +150,7 @@ for j in json.load(sys.stdin)['jobs']:
 "
 ```
 
-或直接打开 `https://github.com/qiugangsic/qlib/actions`。
+或直接打开 `https://github.com/GalenQiu/qlib/actions`。
 
 > 未认证的 GitHub API **每小时只有 60 次请求**，很容易吃光——写这份文档时就吃了一
 > 次。别写轮询间隔小于 20 秒的脚本；一个 run 轮询 40 次就没了。想要更多额度就配一个
@@ -160,7 +160,7 @@ for j in json.load(sys.stdin)['jobs']:
 `api.github.com`，不受配额限制：
 
 ```bash
-curl -sSL "https://github.com/qiugangsic/qlib/actions/workflows/ci.yml/badge.svg?branch=main" \
+curl -sSL "https://github.com/GalenQiu/qlib/actions/workflows/ci.yml/badge.svg?branch=main" \
   | grep -oE 'passing|failing'
 ```
 
