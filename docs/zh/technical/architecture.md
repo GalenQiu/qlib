@@ -10,37 +10,35 @@
 | [`fuzz/`](../../../fuzz) | libFuzzer 目标。 |
 | [`cmake/`](../../../cmake) | 供 `configure_file()` 与 `configure_package_config_file()` 使用的模板。 |
 | [`docs/`](../../../docs) | 用户指南、技术文档与 Doxygen 配置。 |
-| `bench/`、`ci/`、`examples/` | 占位符；每个目录只包含一个 `.gitkeep`。 |
+| [`bench/`](../../../bench) | `qlib_bench` 微基准测试套件，由 `QLIB_BUILD_BENCH` 构建。 |
+| [`ci/`](../../../ci) | 本地验证：`check.sh`、链接与译文检查器、Win32 语法桩，以及 package job 构建的下游消费方。 |
 
 `include/qlib/qlib_export.h` 由 `generate_export_header()` **生成**到构建目录中，源码树里并不存在。见[构建系统](build-system.md)。
 
 ## 分层
 
 ```text
-                 qlib/qlib.h  (umbrella header)
-                       |
-     +-----------------+-----------------+
-     |                 |                 |
-ql_common.h       ql_mem.h         ql_vector.h
-     |                 |                 |
-     |                 +-------> ql_common.h
-     |                                   |
-     +-----------------------------------+
-                       |
-                 src/ql_internal.h      (private, not installed)
-                       |
-   +-------------------+--------------------+
-   |                   |                    |
-ql_common.c         ql_mem.c           ql_vector.c
+qlib/qlib.h                     伞形头文件：包含下面每一个公共头文件
+├── ql_common.h                 不依赖任何 qlib 头文件
+├── ql_mem.h                    → ql_common.h
+├── ql_vector.h                 → ql_common.h、ql_mem.h
+└── ql_net.h                    → ql_common.h
+
+src/ql_internal.h               私有，不安装
+├── ql_common.c                 定义 ql_err_raise()
+├── ql_mem.c                    → ql_common.c
+├── ql_vector.c                 → ql_common.c、ql_mem.c
+└── ql_net.c                    → ql_common.c
 ```
 
-依赖方向只有单向：`ql_vector` 依赖 `ql_mem`，`ql_mem` 依赖 `ql_common`，而 `ql_common` 除 C 库之外不依赖任何东西。
+依赖方向只有单向：`ql_vector` 依赖 `ql_mem`，`ql_mem` 与 `ql_net` 都依赖 `ql_common`，而 `ql_common` 除 C 库之外不依赖任何东西。
 
 | 模块 | 拥有 | 不拥有 |
 |---|---|---|
 | `ql_common` | `ql_ret_t`、`ql_strerror()`、`ql_ret_from_errno()`、错误回调注册表（`ql_set_error_handler()` / `ql_get_error_handler()`）、版本宏与 `ql_version()`、`QLIB_NODISCARD` | 任何分配。`src/ql_common.c` 包含私有头文件与 `<errno.h>`，不包含任何分配器。 |
 | `ql_mem` | `ql_allocator_t` 及其函数指针类型、`ql_default_allocator()`、分配辅助函数（`ql_alloc`、`ql_calloc`、`ql_realloc`、`ql_dealloc`、`ql_alloc_array`、`ql_realloc_array`）、`ql_size_mul_overflow()` | 错误码本身；它调用 `ql_common` 来上报错误。 |
 | `ql_vector` | `ql_vector_t` 与 `struct ql_vector` 的布局、增长策略、元素复制/搬移逻辑 | 分配策略；每一个字节都经由存储在 vector 中的分配器。 |
+| `ql_net` | `ql_net_addr_t` 与 `ql_net_family_t`、文本 IPv4 的解析、格式化与比较 | 任何分配（它不分配内存），以及任何需要 socket、域名解析或平台初始化的东西。 |
 
 两条规则保证分层不被破坏：
 
@@ -56,7 +54,10 @@ ql_common.c         ql_mem.c           ql_vector.c
 | [`ql_common.h`](../../../include/qlib/ql_common.h) | `<stddef.h>`、`qlib/qlib_export.h` | 版本、`ql_ret_t`、错误回调 |
 | [`ql_mem.h`](../../../include/qlib/ql_mem.h) | `<stddef.h>`、`ql_common.h` | `ql_allocator_t` 与分配辅助函数 |
 | [`ql_vector.h`](../../../include/qlib/ql_vector.h) | `<stdbool.h>`、`<stddef.h>`、`ql_common.h`、`ql_mem.h` | `ql_vector_t` |
-| [`qlib.h`](../../../include/qlib/qlib.h) | 上述三者 | 伞形便利头文件 |
+| [`ql_net.h`](../../../include/qlib/ql_net.h) | `<stdbool.h>`、`<stddef.h>`、`ql_common.h` | `ql_net_addr_t`、地址解析与格式化 |
+| [`qlib.h`](../../../include/qlib/qlib.h) | 上述四者，其中 `ql_net.h` 仅在定义了 `QLIB_HAS_NET` 时包含 | 伞形便利头文件 |
+
+`ql_net.h` 是可选的：配置为 `QLIB_BUILD_NET=OFF` 的构建既不编译它的源文件，也不安装它，伞形头文件里的条件包含正是为此。机制见[构建系统](build-system.md)。
 
 `ql_vector.h` 包含 `ql_mem.h` 而不是前置声明 `ql_allocator_t`，因为它的若干函数接受 `const ql_allocator_t*`，而调用方需要完整的结构体才能构造一个。每个头文件都用 `extern "C"` 保护包裹其声明，以照顾 C++ 使用方。
 
@@ -98,7 +99,7 @@ struct ql_vector
 
 调用方持有 `ql_vector_t*`，只能通过访问器触达其内容。该结构体可以增加、删除或重排字段，而不会破坏任何针对该头文件编译过的代码，因为没有任何调用方会计算 `sizeof(struct ql_vector)` 或成员偏移。
 
-`ql_allocator_t` 是刻意的例外：它是 [`ql_mem.h`](../../../include/qlib/ql_mem.h) 中的完整结构体，因为用户必须能够在栈上构造一个并按值传递。它带有 `void* reserved[4]`，以保留同样的增长自由。原因见[设计决策](design-decisions.md)。
+有两种暴露的值语义类型是刻意的例外：`ql_allocator_t` 与 `ql_net_addr_t`。两者都是各自公开头文件中的完整结构体，因为用户必须能够在栈上构造一个；两者都带有尾部 `reserved[]` 成员，以保留同样的增长自由。`ql_net_addr_t` 还存放 16 个地址字节（IPv4 只需要 4 个），这样将来支持 IPv6 就不是 ABI 变更。原因见[设计决策](design-decisions.md)。
 
 ## 请求流程：`ql_vector_push_back()`
 

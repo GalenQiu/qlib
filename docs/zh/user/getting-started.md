@@ -46,8 +46,8 @@ ctest --test-dir build -C Debug --output-on-failure
 |---|---|---|
 | `QLIB_BUILD_TESTS` | 顶层项目为 `ON`，其他情况为 `OFF` | 构建单元测试 |
 | `QLIB_BUILD_FUZZ` | `OFF` | 构建 libFuzzer 目标。需要 Clang；其他编译器只会给出警告 |
-| `QLIB_BUILD_BENCH` | `OFF` | 尚未实现；启用后会打印一条警告 |
-| `QLIB_BUILD_NET` | `OFF` | 尚未实现；启用后会打印一条警告 |
+| `QLIB_BUILD_BENCH` | `OFF` | 构建 `qlib_bench` 微基准测试套件 |
+| `QLIB_BUILD_NET` | `ON` | 构建可选的网络模块（IPv4 地址处理） |
 | `QLIB_SHARED` | `OFF` | 构建共享库而不是静态库 |
 | `QLIB_WERROR` | `OFF` | 把编译器警告视为错误。建议在 CI 中启用 |
 | `QLIB_INSTALL` | `ON` | 生成安装与包配置规则 |

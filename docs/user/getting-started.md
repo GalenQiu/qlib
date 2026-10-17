@@ -49,8 +49,8 @@ configure time.
 |---|---|---|
 | `QLIB_BUILD_TESTS` | `ON` at top level, `OFF` otherwise | Build the unit tests |
 | `QLIB_BUILD_FUZZ` | `OFF` | Build libFuzzer targets. Requires Clang; other compilers produce a warning |
-| `QLIB_BUILD_BENCH` | `OFF` | Not implemented yet; enabling it prints a warning |
-| `QLIB_BUILD_NET` | `OFF` | Not implemented yet; enabling it prints a warning |
+| `QLIB_BUILD_BENCH` | `OFF` | Build the `qlib_bench` micro-benchmark suite |
+| `QLIB_BUILD_NET` | `ON` | Build the optional network module (IPv4 address handling) |
 | `QLIB_SHARED` | `OFF` | Build a shared library instead of a static one |
 | `QLIB_WERROR` | `OFF` | Treat compiler warnings as errors. Recommended in CI |
 | `QLIB_INSTALL` | `ON` | Generate the install and package-config rules |

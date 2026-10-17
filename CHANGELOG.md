@@ -1,0 +1,76 @@
+# Changelog
+
+All notable changes to qlib are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
+to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+Nothing is released yet. Everything below is what exists in the tree at version
+`0.1.0`, which is still marked unreleased because the public API has not been
+frozen.
+
+### Added
+
+#### Modules
+
+- `ql_common` — `ql_ret_t` and `ql_strerror()`, `ql_ret_from_errno()`, an
+  installable error handler (`ql_set_error_handler()` / `ql_get_error_handler()`),
+  version macros and `ql_version()`, and `QLIB_NODISCARD`.
+- `ql_mem` — the replaceable `ql_allocator_t`, `ql_default_allocator()`, the
+  allocation helpers (`ql_alloc`, `ql_calloc`, `ql_realloc`, `ql_dealloc`), the
+  overflow-checked array helpers (`ql_alloc_array`, `ql_realloc_array`), the
+  overflow predicates (`ql_size_mul_overflow`, `ql_size_add_overflow`), and
+  `ql_aligned_alloc()` / `ql_aligned_free()`.
+- `ql_vector` — an opaque, growable, contiguous array, with an aliasing guard
+  that makes `ql_vector_push_back(v, ql_vector_at(v, 0))` defined behaviour.
+- `ql_net` *(optional)* — `ql_net_addr_t` and textual IPv4 parsing, formatting
+  and comparison. No sockets, no DNS, no platform initialisation.
+
+#### Build
+
+- CMake package with `GNUInstallDirs`, an exported target set
+  (`find_package(qlib)` provides `qlib::qlib`), a generated
+  `qlibConfigVersion.cmake`, and a `qlib.pc` for pkg-config.
+- Options: `QLIB_BUILD_TESTS`, `QLIB_BUILD_FUZZ`, `QLIB_BUILD_BENCH`,
+  `QLIB_BUILD_NET`, `QLIB_BUILD_DOCS`, `QLIB_SHARED`, `QLIB_WERROR`,
+  `QLIB_SANITIZE`, `QLIB_INSTALL`.
+- Pinned to C11 exactly: `-std=c11` with compiler extensions disabled.
+- An `uninstall` target.
+
+#### Testing
+
+- A minunit harness with a self-check (`tests/selftest/`) that fails when the
+  harness itself stops reporting failures.
+- 60 unit tests, and 47 when the optional network module is disabled.
+- Three libFuzzer targets: `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
+- Ten micro-benchmark cases across vector, memory and address handling.
+- `ci/check.sh`, running the whole local matrix in eleven steps and
+  distinguishing a skipped check from a passing one.
+
+#### Documentation
+
+- An English user guide and technical documentation, with a Simplified Chinese
+  translation maintained file for file, both included in the generated Doxygen
+  reference.
+- `docs/zh/development-workflow.md`, an operational manual for extending the
+  library.
+- MIT licence.
+
+#### Continuous integration
+
+Eleven jobs: two Linux compilers, macOS, two Windows configurations (static and
+shared, real MSVC), ASan+UBSan, libFuzzer, the Doxygen build with warnings
+treated as errors, the install plus downstream consumer, formatting, and static
+analysis.
+
+### Known limitations
+
+- `ql_net` handles IPv4 only. IPv6 text is reported as `QL_ERR_NOT_SUPPORTED`
+  rather than mis-parsed, and `ql_net_addr_t` already has room for it.
+- There is no concurrency support: no threads, no locks. `ql_lock_t` was
+  removed rather than left as an unimplemented promise, because macOS has no
+  C11 `<threads.h>` and a POSIX+Win32 implementation needs testing on both.
+- `ql_allocator_t`'s `realloc` takes only `(ptr, size, userdata)`, so it cannot
+  use the old size. Callers needing a realloc that knows the old size should
+  allocate-copy-free.

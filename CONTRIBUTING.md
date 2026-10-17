@@ -2,10 +2,11 @@
 
 ## Coding Rules
 1. C11 standard, no compiler extensions.
-2. Public types are opaque (`struct xxx` defined only in `.c`). The only
-   exception is the value-semantics callback table `ql_allocator_t`, which users
-   must be able to construct on the stack. Any exposed struct must carry
-   trailing `reserved[]` fields so it can grow without breaking ABI.
+2. Public types are opaque (`struct xxx` defined only in `.c`). The exceptions
+   are the value-semantics types users must construct on the stack:
+   `ql_allocator_t` and `ql_net_addr_t`. Any exposed struct must carry trailing
+   `reserved[]` fields so it can grow without breaking ABI, and a third one
+   needs its reasoning recorded in the design decisions first.
 3. All public API prefix: `ql_{module}_{action}`.
 4. Return `ql_ret_t` for mutable functions.
 5. Check NULL input pointers, return `QL_ERR_INVALID_ARG`.

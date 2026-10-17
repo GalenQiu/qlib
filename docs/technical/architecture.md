@@ -10,37 +10,35 @@
 | [`fuzz/`](../../fuzz) | libFuzzer targets. |
 | [`cmake/`](../../cmake) | Templates consumed by `configure_file()` and `configure_package_config_file()`. |
 | [`docs/`](../../docs) | User guide, technical documentation, and the Doxygen configuration. |
-| `bench/`, `ci/`, `examples/` | Placeholders; each holds only `.gitkeep`. |
+| [`bench/`](../../bench) | The `qlib_bench` micro-benchmark suite, built with `QLIB_BUILD_BENCH`. |
+| [`ci/`](../../ci) | Local verification: `check.sh`, the link and translation checkers, the Win32 syntax stub, and the downstream consumer the package job builds. |
 
 `include/qlib/qlib_export.h` is **generated** into the build tree by `generate_export_header()`, not present in the source tree. See [build system](build-system.md).
 
 ## Layering
 
 ```text
-                 qlib/qlib.h  (umbrella header)
-                       |
-     +-----------------+-----------------+
-     |                 |                 |
-ql_common.h       ql_mem.h         ql_vector.h
-     |                 |                 |
-     |                 +-------> ql_common.h
-     |                                   |
-     +-----------------------------------+
-                       |
-                 src/ql_internal.h      (private, not installed)
-                       |
-   +-------------------+--------------------+
-   |                   |                    |
-ql_common.c         ql_mem.c           ql_vector.c
+qlib/qlib.h                     umbrella header: every public header below
+├── ql_common.h                 no qlib dependencies
+├── ql_mem.h                    → ql_common.h
+├── ql_vector.h                 → ql_common.h, ql_mem.h
+└── ql_net.h                    → ql_common.h
+
+src/ql_internal.h               private, not installed
+├── ql_common.c                 defines ql_err_raise()
+├── ql_mem.c                    → ql_common.c
+├── ql_vector.c                 → ql_common.c, ql_mem.c
+└── ql_net.c                    → ql_common.c
 ```
 
-Dependencies point in one direction only: `ql_vector` depends on `ql_mem`, `ql_mem` depends on `ql_common`, and `ql_common` depends on nothing but the C library.
+Dependencies point in one direction only: `ql_vector` depends on `ql_mem`, both `ql_mem` and `ql_net` depend on `ql_common`, and `ql_common` depends on nothing but the C library.
 
 | Module | Owns | Does not own |
 |---|---|---|
 | `ql_common` | `ql_ret_t`, `ql_strerror()`, `ql_ret_from_errno()`, the error-handler registry (`ql_set_error_handler()` / `ql_get_error_handler()`), version macros and `ql_version()`, `QLIB_NODISCARD` | Any allocation. `src/ql_common.c` includes the private header and `<errno.h>`, and no allocator. |
 | `ql_mem` | `ql_allocator_t` and its function-pointer types, `ql_default_allocator()`, the allocation helpers (`ql_alloc`, `ql_calloc`, `ql_realloc`, `ql_dealloc`, `ql_alloc_array`, `ql_realloc_array`), `ql_size_mul_overflow()` | Error codes themselves; it calls into `ql_common` to raise. |
 | `ql_vector` | `ql_vector_t` and the `struct ql_vector` layout, growth policy, element copy/shift logic | Allocation strategy; every byte goes through the allocator stored in the vector. |
+| `ql_net` | `ql_net_addr_t` and `ql_net_family_t`, textual IPv4 parsing, formatting and comparison | Any allocation (it allocates nothing), and anything needing a socket, a name lookup or platform initialisation. |
 
 Two rules keep the layering intact:
 
@@ -56,7 +54,10 @@ Each public header is self-contained: including it alone is enough to use its de
 | [`ql_common.h`](../../include/qlib/ql_common.h) | `<stddef.h>`, `qlib/qlib_export.h` | version, `ql_ret_t`, error handler |
 | [`ql_mem.h`](../../include/qlib/ql_mem.h) | `<stddef.h>`, `ql_common.h` | `ql_allocator_t` and allocation helpers |
 | [`ql_vector.h`](../../include/qlib/ql_vector.h) | `<stdbool.h>`, `<stddef.h>`, `ql_common.h`, `ql_mem.h` | `ql_vector_t` |
-| [`qlib.h`](../../include/qlib/qlib.h) | all three above | umbrella convenience header |
+| [`ql_net.h`](../../include/qlib/ql_net.h) | `<stdbool.h>`, `<stddef.h>`, `ql_common.h` | `ql_net_addr_t`, address parsing and formatting |
+| [`qlib.h`](../../include/qlib/qlib.h) | all four above, `ql_net.h` only when `QLIB_HAS_NET` is defined | umbrella convenience header |
+
+`ql_net.h` is optional: a build configured with `QLIB_BUILD_NET=OFF` neither compiles its source nor installs it, which is why the umbrella header guards the include. The mechanics are in [build system](build-system.md).
 
 `ql_vector.h` includes `ql_mem.h` rather than forward-declaring `ql_allocator_t`, because several of its functions take a `const ql_allocator_t*` and callers need the complete struct to build one. Every header wraps its declarations in `extern "C"` guards for C++ consumers.
 
@@ -68,7 +69,7 @@ Each public header is self-contained: including it alone is enough to use its de
 void ql_err_raise(ql_ret_t code, const char* message);
 ```
 
-`ql_err_raise()` is defined in `src/ql_common.c` and called from `src/ql_mem.c` and `src/ql_vector.c`, so it must have external linkage at link time. It is deliberately **not** marked `QLIB_EXPORT`, which has different consequences per platform:
+`ql_err_raise()` is defined in `src/ql_common.c` and called from `src/ql_mem.c`, `src/ql_vector.c` and `src/ql_net.c`, so it must have external linkage at link time. It is deliberately **not** marked `QLIB_EXPORT`, which has different consequences per platform:
 
 | Platform | Effect |
 |---|---|
@@ -98,7 +99,7 @@ struct ql_vector
 
 Callers hold `ql_vector_t*` and can only reach the contents through accessors. The struct can gain, lose or reorder fields without breaking anyone who compiled against the header, because no caller ever computes `sizeof(struct ql_vector)` or a member offset.
 
-`ql_allocator_t` is the deliberate exception: it is a complete struct in [`ql_mem.h`](../../include/qlib/ql_mem.h), because users must be able to construct one on the stack and pass it by value. It carries `void* reserved[4]` to preserve the same freedom to grow. See [design decisions](design-decisions.md) for the reasoning.
+Two exposed value types are the deliberate exceptions: `ql_allocator_t` and `ql_net_addr_t`. Both are complete structs in their public headers, because users must be able to build one on the stack, and both carry trailing `reserved[]` members to preserve the same freedom to grow. `ql_net_addr_t` also stores sixteen address bytes although IPv4 needs four, so IPv6 is not an ABI change later. See [design decisions](design-decisions.md) for the reasoning.
 
 ## Request flow: `ql_vector_push_back()`
 

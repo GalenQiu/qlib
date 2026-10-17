@@ -51,6 +51,10 @@ cmake -S . -B build -DQLIB_BUILD_DOCS=ON
 cmake --build build --target docs      # writes docs/html/index.html
 ```
 
+Release history, and what is still missing, is in [`CHANGELOG.md`](CHANGELOG.md).
+Contributors should read [`CONTRIBUTING.md`](CONTRIBUTING.md) and, if they read
+Chinese, [the development workflow guide](docs/zh/development-workflow.md).
+
 ## Build
 ```bash
 mkdir build && cd build
