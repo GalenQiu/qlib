@@ -82,7 +82,14 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_SHARED=${{ matrix.shared }}
 
-      - name: Build
+      # Split from the full build so a failure says which half broke. MSVC
+      # cannot be run locally, so the only signal available is which step went
+      # red: "Build library" means src/, "Build tests and benchmarks" means the
+      # test or bench code.
+      - name: Build library
+        run: cmake --build build --config Debug --target qlib --parallel
+
+      - name: Build tests and benchmarks
         run: cmake --build build --config Debug --parallel
 
       - name: Test

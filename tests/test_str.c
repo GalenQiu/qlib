@@ -94,7 +94,7 @@ MU_TEST(test_create_from_copies_the_text)
     ql_str_t* str = NULL;
     char source[16];
 
-    strcpy(source, "hello");
+    memcpy(source, "hello", sizeof "hello");
     MU_ASSERT(ql_str_create_from(NULL, source, &str) == QL_OK);
 
     MU_CHECK(ql_str_size(str) == 5);

@@ -152,22 +152,22 @@ MU_TEST(test_struct_and_string_keys)
      * bytes have to be zeroed by the caller. */
     MU_ASSERT(ql_hash_create(NULL, sizeof name, sizeof value, &strings) == QL_OK);
     memset(name, 0, sizeof name);
-    strcpy(name, "alpha");
+    memcpy(name, "alpha", sizeof "alpha");
     value = 1;
     MU_ASSERT(ql_hash_set(strings, &name, &value) == QL_OK);
 
     memset(name, 0, sizeof name);
-    strcpy(name, "beta");
+    memcpy(name, "beta", sizeof "beta");
     value = 2;
     MU_ASSERT(ql_hash_set(strings, &name, &value) == QL_OK);
 
     memset(name, 0, sizeof name);
-    strcpy(name, "alpha");
+    memcpy(name, "alpha", sizeof "alpha");
     MU_ASSERT(ql_hash_get(strings, &name, &out) == QL_OK);
     MU_CHECK(out == 1);
 
     memset(name, 0, sizeof name);
-    strcpy(name, "gamma");
+    memcpy(name, "gamma", sizeof "gamma");
     MU_CHECK(ql_hash_get(strings, &name, &out) == QL_ERR_NOT_FOUND);
 
     ql_hash_destroy(strings);
