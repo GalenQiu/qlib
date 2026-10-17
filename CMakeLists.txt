@@ -33,6 +33,16 @@ option(QLIB_BUILD_NET   "Build qlib network module"   ON)
 # Threads are optional because they are a link dependency (Threads::Threads).
 # Nothing else in the library needs them; the modules that do will say so.
 option(QLIB_BUILD_THREADS "Build the qlib threading module" OFF)
+
+# The logger serialises writes with a mutex, so it needs the threading module.
+option(QLIB_BUILD_LOG     "Build the qlib logging module (needs QLIB_BUILD_THREADS)" OFF)
+
+if(QLIB_BUILD_LOG AND NOT QLIB_BUILD_THREADS)
+    message(FATAL_ERROR
+        "QLIB_BUILD_LOG requires QLIB_BUILD_THREADS=ON. A logger shared between "
+        "threads that interleaves half-lines is worse than no logger, so the "
+        "logger takes the mutex it needs rather than documenting that it has none.")
+endif()
 option(QLIB_SHARED      "Build shared library"        OFF)
 option(QLIB_WERROR      "Treat compiler warnings as errors" OFF)
 option(QLIB_INSTALL     "Generate install and package config rules" ON)
@@ -125,6 +135,10 @@ if(QLIB_BUILD_THREADS)
     list(APPEND QLIB_SRC src/ql_thread.c)
 endif()
 
+if(QLIB_BUILD_LOG)
+    list(APPEND QLIB_SRC src/ql_log.c)
+endif()
+
 if(QLIB_SHARED)
     add_library(qlib SHARED ${QLIB_SRC})
 else()
@@ -198,8 +212,15 @@ else()
     set(QLIB_PC_LIBS "")
 endif()
 
+if(QLIB_BUILD_LOG)
+    target_compile_definitions(qlib PUBLIC QLIB_HAS_LOG)
+    set(QLIB_PC_LOG_DEFINES " -DQLIB_HAS_LOG")
+else()
+    set(QLIB_PC_LOG_DEFINES "")
+endif()
+
 # Gather the optional defines and libraries for qlib.pc.
-set(QLIB_PC_DEFINES "${QLIB_PC_DEFINES}${QLIB_PC_THREAD_DEFINES}")
+set(QLIB_PC_DEFINES "${QLIB_PC_DEFINES}${QLIB_PC_THREAD_DEFINES}${QLIB_PC_LOG_DEFINES}")
 set(QLIB_PC_LIBS "${QLIB_PC_THREAD_LIBS}${QLIB_PC_LIBS}")
 
 set_target_properties(qlib PROPERTIES
@@ -284,6 +305,9 @@ if(QLIB_INSTALL)
     endif()
     if(NOT QLIB_BUILD_THREADS)
         list(APPEND QLIB_OPTIONAL_HEADER_RULES PATTERN "ql_thread.h" EXCLUDE)
+    endif()
+    if(NOT QLIB_BUILD_LOG)
+        list(APPEND QLIB_OPTIONAL_HEADER_RULES PATTERN "ql_log.h" EXCLUDE)
     endif()
 
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/qlib"

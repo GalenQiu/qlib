@@ -35,6 +35,8 @@ python3 ci/check_links.py
 7. [字符串](user/string.md) —— 可增长、始终以 NUL 结尾的字节串
 8. [哈希表](user/hash.md) —— 定长键到定长值
 9. [双向链表](user/list.md) —— 稳定的节点句柄与常数时间删除
+10. [线程](user/thread.md) —— 线程、互斥量与条件变量
+11. [日志](user/log.md) —— 级别、格式，以及控制台与轮转文件输出目标（sink）
 
 ## 技术文档
 

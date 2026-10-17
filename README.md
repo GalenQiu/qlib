@@ -12,6 +12,7 @@ Cross platform: Linux / macOS / Windows, MIT license.
 - `ql_hash`: a hash table of fixed size keys to fixed size values
 - `ql_list`: a doubly linked list with stable node handles
 - `ql_thread`: threads, mutexes and condition variables, POSIX and Windows
+- `ql_log`: a logger with levels, plain/raw/JSON output and rotating files
 - Abstract memory allocator, replaceable, with overflow checked array helpers
 - Unified error codes with `ql_strerror`/`ql_ret_from_errno` and an optional
   error callback
@@ -31,6 +32,7 @@ Cross platform: Linux / macOS / Windows, MIT license.
 | `<qlib/ql_hash.h>` | `ql_hash_t`, a hash table of fixed size keys to fixed size values |
 | `<qlib/ql_list.h>` | `ql_list_t`, a doubly linked list with stable node handles |
 | `<qlib/ql_thread.h>` | threads, mutexes and condition variables (optional module) |
+| `<qlib/ql_log.h>` | logger: levels, formats, console and rotating files (optional module) |
 | `<qlib/ql_net.h>` | IPv4 address parsing, formatting and TCP sockets (optional module) |
 | `<qlib/qlib.h>` | umbrella header pulling in all of the above |
 
@@ -48,6 +50,7 @@ The full documentation lives in [`docs/`](docs/index.md), in English with a
   [hash table](docs/user/hash.md),
   [linked list](docs/user/list.md),
   [threads](docs/user/thread.md),
+  [logging](docs/user/log.md),
   [network addresses](docs/user/net.md)
 - **Technical docs** — [architecture](docs/technical/architecture.md),
   [design decisions](docs/technical/design-decisions.md),
@@ -99,6 +102,7 @@ cmake --build . --config Debug
 - `QLIB_BUILD_FUZZ=OFF` build libFuzzer targets; requires Clang, and with any
   other compiler the option warns instead of silently doing nothing
 - `QLIB_BUILD_THREADS=OFF` build the optional threading module (POSIX and Windows)
+- `QLIB_BUILD_LOG=OFF` build the optional logging module (requires `QLIB_BUILD_THREADS`)
 - `QLIB_BUILD_NET=ON` build the optional network module (address handling and TCP sockets)
 - `QLIB_SHARED=OFF` build shared library instead of static
 - `QLIB_WERROR=OFF` treat warnings as errors (recommended in CI)

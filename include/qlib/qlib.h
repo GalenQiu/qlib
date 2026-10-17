@@ -27,4 +27,8 @@
 #  include "qlib/ql_thread.h"
 #endif
 
+#ifdef QLIB_HAS_LOG
+#  include "qlib/ql_log.h"
+#endif
+
 #endif /* QLIB_QLIB_H */

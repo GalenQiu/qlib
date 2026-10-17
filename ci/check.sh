@@ -144,7 +144,8 @@ step_tidy() {
     # clang-tidy falls back to a default command for files that have no entry in
     # compile_commands.json.
     cmake -S . -B "$SCRATCH/build" -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON \
-        -DQLIB_BUILD_THREADS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null || return 1
+        -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null || return 1
     cmake --build "$SCRATCH/build" >/dev/null || return 1
     clang-tidy src/*.c tests/*.c bench/*.c fuzz/*.c -p "$SCRATCH/build"
 }
@@ -152,9 +153,9 @@ step_tidy() {
 step_threads() {
     have cmake || { echo "cmake not found"; return 2; }
 
-    # Built with the optional module on, and with ThreadSanitizer when clang is
-    # available: a threading module that is only ever tested without a race
-    # detector is not really tested.
+    # Built with both optional modules that need the threading layer, and with
+    # ThreadSanitizer when clang is available: a threading module that is only
+    # ever tested without a race detector is not really tested.
     local flags=""
     if have clang; then
         flags="-DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fsanitize=thread -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread"
@@ -162,7 +163,7 @@ step_threads() {
 
     # shellcheck disable=SC2086
     cmake -S . -B "$SCRATCH/threads" -DQLIB_WERROR=ON -DQLIB_BUILD_THREADS=ON \
-        -DCMAKE_BUILD_TYPE=Debug $flags >/dev/null || return 1
+        -DQLIB_BUILD_LOG=ON -DCMAKE_BUILD_TYPE=Debug $flags >/dev/null || return 1
     cmake --build "$SCRATCH/threads" >/dev/null || return 1
     ctest --test-dir "$SCRATCH/threads" --output-on-failure
 }

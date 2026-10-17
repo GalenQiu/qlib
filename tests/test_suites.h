@@ -23,4 +23,8 @@ MU_DECLARE_SUITE(test_suite_net);
 MU_DECLARE_SUITE(test_suite_thread);
 #endif
 
+#ifdef QLIB_HAS_LOG
+MU_DECLARE_SUITE(test_suite_log);
+#endif
+
 #endif /* QLIB_TEST_SUITES_H */

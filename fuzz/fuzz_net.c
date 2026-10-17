@@ -80,18 +80,26 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
         abort();
     }
 
-    /* Exactly one byte short must be refused, and refused without writing. */
+    /* One byte short of what the address needs must be refused. */
     if (ql_net_addr_format(&addr, again_text, length) != QL_ERR_OUT_OF_RANGE)
     {
         abort();
     }
 
-    /* One byte more than needed must be accepted. */
-    if (ql_net_addr_format(&addr, again_text, length + 1U) != QL_OK)
+    /*
+     * The documented minimum is 16 bytes for IPv4 whatever the address needs,
+     * not `strlen + 1`. Asserting the tighter rule here was a bug in this
+     * harness: the library is entitled to reject a short buffer, and does.
+     */
+    if (ql_net_addr_format(&addr, again_text, 16) != QL_OK)
     {
         abort();
     }
     if (strcmp(out, again_text) != 0)
+    {
+        abort();
+    }
+    if (ql_net_addr_format(&addr, again_text, 15) != QL_ERR_OUT_OF_RANGE)
     {
         abort();
     }

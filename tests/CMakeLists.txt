@@ -26,6 +26,10 @@ if(QLIB_BUILD_THREADS)
     list(APPEND QLIB_TEST_SRC test_thread.c)
 endif()
 
+if(QLIB_BUILD_LOG)
+    list(APPEND QLIB_TEST_SRC test_log.c)
+endif()
+
 add_executable(qlib_test ${QLIB_TEST_SRC})
 
 target_link_libraries(qlib_test PRIVATE qlib::qlib qlib_warnings)

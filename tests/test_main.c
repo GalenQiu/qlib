@@ -14,6 +14,9 @@ int main(void)
 #ifdef QLIB_HAS_THREADS
     MU_RUN_SUITE(test_suite_thread);
 #endif
+#ifdef QLIB_HAS_LOG
+    MU_RUN_SUITE(test_suite_log);
+#endif
     MU_REPORT();
     return MU_EXIT_CODE;
 }

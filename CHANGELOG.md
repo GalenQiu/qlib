@@ -33,6 +33,11 @@ frozen.
   nodes come and go, giving constant time removal from anywhere.
 - `ql_vector` — an opaque, growable, contiguous array, with an aliasing guard
   that makes `ql_vector_push_back(v, ql_vector_at(v, 0))` defined behaviour.
+- `ql_log` *(optional)* — levels with runtime filtering and compile-time
+  stripping, plain/raw/JSON output with JSON escaping, and console and
+  rotating-file sinks. A singleton with fixed-size records, both deliberate; it
+  requires the threading module so that a shared logger cannot interleave
+  half-lines. Asynchronous logging, syslog and structured fields are not in it.
 - `ql_thread` *(optional)* — `ql_thread_t`, `ql_mutex_t` and `ql_cond_t` over
   `pthread` and the Win32 equivalents. The first part of the library that is not
   plain C11, and the second link dependency (`Threads::Threads`).
@@ -57,7 +62,7 @@ frozen.
 
 - A minunit harness with a self-check (`tests/selftest/`) that fails when the
   harness itself stops reporting failures.
-- 116 unit tests on the default build, 125 with the threading module enabled, and 95 with the network module disabled.
+- 116 unit tests on the default build, 136 with the threading and logging modules enabled, and 95 with the network module disabled.
 - Six libFuzzer targets: `fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
 - Sixteen micro-benchmark cases across the containers, memory and address handling.
 - `ci/check.sh`, running the whole local matrix in eleven steps and

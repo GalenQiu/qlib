@@ -189,3 +189,23 @@ All three types are opaque handles rather than embeddable values. An embedded `q
 Building the module found two bugs that a plain run would not have. The first was a real use-after-free: the thread's start context lived in the same allocation as the handle, so `ql_thread_detach()` freed memory the trampoline had not read yet -- ASAN caught it. It is now two allocations with one owner each. The second was in the test: the leak check read a shared counter while a thread was still running, which ThreadSanitizer correctly called a data race.
 
 An expired condition-variable wait is `QL_ERR_TIMEOUT` on both platforms, but the POSIX side had to use `timespec_get` rather than `clock_gettime`: the latter is POSIX.1b and stays hidden under `-std=c11`, which is the dialect qlib builds in.
+
+---
+
+## ADR-18: The logger is a singleton with fixed buffers, and that is deliberate
+
+**Context.** A capable logging library (`xlog`) was evaluated for merging. It brings levels, structured key-value fields rendered as `k=v` or JSON, three sinks including syslog, rotation, and a synchronous and asynchronous mode. Three of its properties conflict with how the rest of qlib is built: it is a singleton rather than a handle, its record buffers are compile-time macros declared as part of the ABI, and its asynchronous mode needs a thread. Holding it back until all three were resolved would have meant shipping none of it.
+
+**Decision.** Merge the synchronous core as `ql_log`, and take the three departures deliberately rather than by accident.
+
+*The singleton stays.* A logger is genuinely per-process, and threading a handle through every call site would be felt in every function that ever logs. It is the second piece of global state in the library, after the error-handler registry, and this record is where that is admitted. `ql_log_init()` is idempotent so that "who initialises it" never becomes a question.
+
+*The buffers stay fixed, and are not tunable.* `QL_LOG_LINE_MAX` is part of the format: a record that needs an arbitrary amount of memory turns a diagnostic into an allocation failure, which is the opposite of what a diagnostic is for. A message that does not fit is truncated rather than dropped. The important part is that the size is **not** a per-consumer macro like `XLOG_MSG_MAX` was — a struct whose layout differs between the library and the application is not an ABI, it is a crash waiting for two differently-configured builds.
+
+*It requires the threading module.* `QLIB_BUILD_LOG` without `QLIB_BUILD_THREADS` is a configure error, because the logger takes a mutex. A logger that interleaves half-lines between threads is worse than no logger, and making the mutex optional would mean the safe configuration is the one nobody tests.
+
+*What was left out, and why.* Asynchronous logging, syslog, and thread-local structured fields are all deferred. The first two need work that this slice does not: async needs a ring queue and a writer thread, syslog is POSIX-only. Structured fields need thread-local storage, which the threading module does not yet provide. JSON output was kept, because once formatting exists it is self-contained.
+
+**Consequences.** `src/ql_log.c` contains **no `#ifdef` at all** — everything it needs is C11. That is not an accident either: colour is explicit rather than sniffing for a terminal (which needs `isatty`, a POSIX call), and the timestamp uses `localtime()`/`gmtime()` under the logger's own mutex rather than the POSIX reentrant variants. A module with no platform code cannot fail on a platform it was never compiled for, which is worth more than automatic colour.
+
+The cost is a second link dependency chain (`ql_log` → `ql_thread` → `Threads::Threads`), and a log format that is now a compatibility surface: `PLAIN` lines and `JSON` keys are what log shippers will parse, so changing them is a breaking change from here on. Both are recorded rather than discovered later.
