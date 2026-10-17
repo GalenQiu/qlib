@@ -126,6 +126,35 @@ ql_log_set_rotation(4 * 1024 * 1024, 3);        /* 4 MiB，保留三个备份 */
 最后几行；`QL_LOG_FATAL` 会自行刷新（flush），因为它是你最希望能在崩溃后留存
 下来的那条记录。
 
+## 异步日志
+
+```c
+ql_log_async_enable(256);    /* 一个写线程，外加一个 256 条记录的队列 */
+QLOG_INFO("this returns without touching the file");
+ql_log_async_flush();        /* 此刻已入队的内容都已经写出 */
+ql_log_async_enable(0);      /* 排空、join、回到同步模式 */
+```
+
+生产者格式化一条记录并把它拷贝进队列；它们从不为文件 I/O 等待。这正是全部
+要点：日志器绝不能成为程序卡顿的原因。
+
+**当队列满时，记录会被丢弃并计数**，既不是无限制地缓冲，也不是同步写入。
+`ql_log_async_dropped()` 说明被丢弃了多少条。因此一条记录要么被写出、要么被
+计数——测试断言的正是这个和，因为"会发生丢弃"这件事，测试无法在不变得不稳定
+的前提下检查。
+
+记录保持其顺序。因为一条记录以 `QL_LOG_LINE_MAX` 为界，队列的内存是事先已知
+的：`capacity * QL_LOG_LINE_MAX` 字节。
+
+| 调用 | 效果 |
+|---|---|
+| `ql_log_async_enable(n)` | 以 @p n 个槽位启动写线程；若已开启则返回 `QL_ERR_BUSY` |
+| `ql_log_async_enable(0)` | 停止并排空，然后 join；回到同步模式 |
+| `ql_log_async_flush()` | 等待队列为空且写线程空闲 |
+| `ql_log_async_dropped()` | 因队列已满而丢失的记录数 |
+
+`ql_log_shutdown()` 会先停止异步模式，因此正常关闭的程序不会丢掉已经入队的内容。
+
 ## 关闭
 
 ```c

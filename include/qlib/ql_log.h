@@ -224,6 +224,39 @@ QLIB_EXPORT ql_ret_t ql_log_set_file(const char* path);
 QLIB_EXPORT void ql_log_set_rotation(size_t max_bytes, int backups);
 
 /* ------------------------------------------------------------------------- */
+/* Asynchronous logging                                                       */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Hand records to a writer thread instead of writing them inline.
+ *
+ * @param capacity How many records may be queued. 0 disables asynchronous mode,
+ *                 draining whatever is queued and joining the writer first.
+ * @return QL_OK, QL_ERR_NOMEM, or QL_ERR_SYS if the thread could not start.
+ *
+ * Producers format the record and copy it into the queue; they never wait for
+ * file I/O. When the queue is full the record is **dropped and counted**, not
+ * buffered without limit and not written synchronously: a logger must not
+ * become the reason a program stalls or runs out of memory. Check
+ * ql_log_async_dropped() if losing records matters.
+ *
+ * Records keep their order. Since each one is bounded by QL_LOG_LINE_MAX, the
+ * queue's memory is known up front: `capacity * QL_LOG_LINE_MAX` bytes.
+ */
+QLIB_EXPORT ql_ret_t ql_log_async_enable(size_t capacity);
+
+/**
+ * @brief Wait until everything queued has been written.
+ *
+ * A no-op when asynchronous mode is off. Call it before reading the log file in
+ * a test, and before exit in a program that cares about its last few records.
+ */
+QLIB_EXPORT void ql_log_async_flush(void);
+
+/** @brief Records dropped because the queue was full. Zero when synchronous. */
+QLIB_NODISCARD QLIB_EXPORT size_t ql_log_async_dropped(void);
+
+/* ------------------------------------------------------------------------- */
 /* Writing                                                                    */
 /* ------------------------------------------------------------------------- */
 

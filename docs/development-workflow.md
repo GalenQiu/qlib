@@ -22,7 +22,7 @@ of the build system see [Build system](technical/build-system.md).
 | Language standard | **Exactly C11, compiler extensions disabled** (`-std=c11`, not `gnu11`) |
 | Modules | `ql_common` (errors/version), `ql_mem` (allocator), `ql_str` (string), `ql_hash` (hash table), `ql_list` (linked list), `ql_vector` (dynamic array), `ql_thread` (threads, optional), `ql_net` (IPv4 and TCP, optional) |
 | Public headers | `ql_common.h`, `ql_mem.h`, `ql_str.h`, `ql_hash.h`, `ql_list.h`, `ql_vector.h`, `ql_thread.h`, `ql_net.h`, `qlib.h` (umbrella) |
-| Unit tests | **116** default, **136** with threads and logging, **95** without the network module |
+| Unit tests | **140** with threads and logging, **125** with threads only, **116** default, **95** without the network module |
 | Fuzz targets | 6 (`fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`) |
 | Benchmark cases | 16 |
 | Local verification | `./ci/check.sh`, **12 steps** |

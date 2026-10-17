@@ -21,6 +21,12 @@
  */
 typedef struct
 {
+    size_t length;
+    char text[QL_LOG_LINE_MAX];
+} ql_log_record;
+
+typedef struct
+{
     ql_allocator_t alloc;
     ql_mutex_t* mutex;
     ql_log_level_t level;
@@ -33,10 +39,27 @@ typedef struct
     size_t rotation_bytes;
     int rotation_backups;
     size_t written;
+
+    /* Asynchronous mode. The queue has its own mutex so that a producer never
+     * waits for the writer's file I/O; the writer never holds the queue mutex
+     * while taking the state mutex, so the two cannot deadlock. */
+    ql_mutex_t* queue_mutex;
+    ql_cond_t* queue_cond;
+    ql_log_record* queue;
+    size_t queue_capacity;
+    size_t queue_head;
+    size_t queue_count;
+    size_t dropped;
+    bool queue_running;
+    bool writer_busy;
+    ql_thread_t* writer;
 } ql_log_state;
 
 static ql_log_state g_log;
 static bool g_ready;
+
+/* Defined below, but the writer thread needs it. */
+static void ql_log_emit(const char* text, size_t length);
 
 static const char* const g_level_names[] = {"trace", "debug", "info", "warn", "error", "fatal", "off"};
 static const char* const g_level_labels[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "OFF"};
@@ -188,6 +211,16 @@ ql_ret_t ql_log_init(const ql_allocator_t* alloc)
     g_log.rotation_bytes = 0;
     g_log.rotation_backups = 1;
     g_log.written = 0;
+    g_log.queue_mutex = NULL;
+    g_log.queue_cond = NULL;
+    g_log.queue = NULL;
+    g_log.queue_capacity = 0;
+    g_log.queue_head = 0;
+    g_log.queue_count = 0;
+    g_log.dropped = 0;
+    g_log.queue_running = false;
+    g_log.writer_busy = false;
+    g_log.writer = NULL;
     g_ready = true;
 
     return QL_OK;
@@ -211,6 +244,9 @@ void ql_log_shutdown(void)
     {
         return;
     }
+
+    /* Drain and join before touching anything the writer uses. */
+    (void)ql_log_async_enable(0);
 
     if (g_log.file != NULL)
     {
@@ -546,6 +582,178 @@ void ql_log_set_rotation(size_t max_bytes, int backups)
  * Writing
  * ------------------------------------------------------------------------ */
 
+/* ---------------------------------------------------------------------------
+ * Asynchronous logging
+ * ------------------------------------------------------------------------ */
+
+/**
+ * @brief Drain the queue until told to stop, then take the mutex, emit, repeat.
+ *
+ * The queue mutex is never held while the state mutex is taken, and the producer
+ * only ever nests state-then-queue, so the two cannot deadlock.
+ */
+static void ql_log_writer_thread(void* arg)
+{
+    (void)arg;
+
+    for (;;)
+    {
+        ql_log_record record;
+        bool have = false;
+
+        ql_mutex_lock(g_log.queue_mutex);
+        while (g_log.queue_count == 0 && g_log.queue_running)
+        {
+            (void)ql_cond_wait(g_log.queue_cond, g_log.queue_mutex, 0);
+        }
+
+        if (g_log.queue_count > 0)
+        {
+            record = g_log.queue[g_log.queue_head];
+            g_log.queue_head = (g_log.queue_head + 1) % g_log.queue_capacity;
+            g_log.queue_count--;
+            g_log.writer_busy = true;
+            have = true;
+        }
+        ql_mutex_unlock(g_log.queue_mutex);
+
+        if (!have)
+        {
+            /* Stopping and nothing left: say so and leave. */
+            ql_mutex_lock(g_log.queue_mutex);
+            g_log.writer_busy = false;
+            ql_cond_broadcast(g_log.queue_cond);
+            ql_mutex_unlock(g_log.queue_mutex);
+            return;
+        }
+
+        ql_mutex_lock(g_log.mutex);
+        ql_log_emit(record.text, record.length);
+        ql_mutex_unlock(g_log.mutex);
+
+        ql_mutex_lock(g_log.queue_mutex);
+        g_log.writer_busy = false;
+        ql_cond_broadcast(g_log.queue_cond);
+        ql_mutex_unlock(g_log.queue_mutex);
+    }
+}
+
+ql_ret_t ql_log_async_enable(size_t capacity)
+{
+    if (!ql_log_ensure())
+    {
+        return QL_ERR_NOMEM;
+    }
+
+    if (capacity == 0)
+    {
+        if (g_log.writer != NULL)
+        {
+            ql_mutex_lock(g_log.queue_mutex);
+            g_log.queue_running = false;
+            ql_cond_broadcast(g_log.queue_cond);
+            ql_mutex_unlock(g_log.queue_mutex);
+
+            /* The writer drains what is queued before it exits. */
+            ql_thread_join(g_log.writer);
+            g_log.writer = NULL;
+
+            ql_dealloc(&g_log.alloc, g_log.queue);
+            g_log.queue = NULL;
+            ql_cond_destroy(g_log.queue_cond);
+            g_log.queue_cond = NULL;
+            ql_mutex_destroy(g_log.queue_mutex);
+            g_log.queue_mutex = NULL;
+
+            g_log.queue_capacity = 0;
+            g_log.queue_head = 0;
+            g_log.queue_count = 0;
+            g_log.dropped = 0;
+            g_log.writer_busy = false;
+        }
+        return QL_OK;
+    }
+
+    if (g_log.writer != NULL)
+    {
+        /* Already asynchronous. Resizing mid-flight is not supported, and is
+         * not silent: the caller gets QL_ERR_BUSY. */
+        ql_err_raise(QL_ERR_BUSY, "ql_log_async_enable: asynchronous mode is already on");
+        return QL_ERR_BUSY;
+    }
+
+    g_log.queue = ql_alloc(&g_log.alloc, capacity * sizeof *g_log.queue);
+    if (g_log.queue == NULL)
+    {
+        return QL_ERR_NOMEM;
+    }
+
+    if (ql_mutex_create(&g_log.alloc, &g_log.queue_mutex) != QL_OK ||
+        ql_cond_create(&g_log.alloc, &g_log.queue_cond) != QL_OK)
+    {
+        ql_dealloc(&g_log.alloc, g_log.queue);
+        g_log.queue = NULL;
+        ql_mutex_destroy(g_log.queue_mutex);
+        g_log.queue_mutex = NULL;
+        return QL_ERR_NOMEM;
+    }
+
+    g_log.queue_capacity = capacity;
+    g_log.queue_head = 0;
+    g_log.queue_count = 0;
+    g_log.dropped = 0;
+    g_log.writer_busy = false;
+    g_log.queue_running = true;
+
+    if (ql_thread_create(&g_log.alloc, ql_log_writer_thread, NULL, &g_log.writer) != QL_OK)
+    {
+        g_log.writer = NULL;
+        g_log.queue_capacity = 0;
+        ql_cond_destroy(g_log.queue_cond);
+        g_log.queue_cond = NULL;
+        ql_mutex_destroy(g_log.queue_mutex);
+        g_log.queue_mutex = NULL;
+        ql_dealloc(&g_log.alloc, g_log.queue);
+        g_log.queue = NULL;
+        return QL_ERR_SYS;
+    }
+
+    return QL_OK;
+}
+
+void ql_log_async_flush(void)
+{
+    if (!g_ready || g_log.queue_mutex == NULL)
+    {
+        return;
+    }
+
+    ql_mutex_lock(g_log.queue_mutex);
+    /* A timeout on each wait means a bug here cannot hang a program; the loop
+     * simply re-checks the predicate, which is the rule for condition
+     * variables anyway. */
+    while (g_log.queue_count > 0 || g_log.writer_busy)
+    {
+        (void)ql_cond_wait(g_log.queue_cond, g_log.queue_mutex, 1000);
+    }
+    ql_mutex_unlock(g_log.queue_mutex);
+}
+
+size_t ql_log_async_dropped(void)
+{
+    size_t value;
+
+    if (!g_ready || g_log.queue_mutex == NULL)
+    {
+        return 0;
+    }
+
+    ql_mutex_lock(g_log.queue_mutex);
+    value = g_log.dropped;
+    ql_mutex_unlock(g_log.queue_mutex);
+    return value;
+}
+
 /** @brief Write one rendered line to every enabled sink. */
 static void ql_log_emit(const char* text, size_t length)
 {
@@ -647,13 +855,45 @@ void ql_log_vwrite(ql_log_level_t level, const char* file, int line, const char*
     ql_mutex_lock(g_log.mutex);
 
     ql_log_render(rendered, sizeof rendered, level, file, line, func, message);
-    ql_log_emit(rendered, strlen(rendered));
 
-    /* A fatal record is the last one before something goes wrong, so it must
-     * not sit in a buffer. Ordinary records rely on ql_log_flush(). */
-    if (level == QL_LOG_FATAL && g_log.file != NULL)
+    if (g_log.queue_capacity > 0)
     {
-        (void)fflush(g_log.file);
+        size_t length = strlen(rendered);
+
+        if (length >= QL_LOG_LINE_MAX)
+        {
+            length = QL_LOG_LINE_MAX - 1;
+        }
+
+        ql_mutex_lock(g_log.queue_mutex);
+        if (g_log.queue_count == g_log.queue_capacity)
+        {
+            /* Full: drop and count. A logger must not become the reason a
+             * program stalls or grows without bound. */
+            g_log.dropped++;
+        }
+        else
+        {
+            size_t slot = (g_log.queue_head + g_log.queue_count) % g_log.queue_capacity;
+
+            memcpy(g_log.queue[slot].text, rendered, length);
+            g_log.queue[slot].text[length] = '\0';
+            g_log.queue[slot].length = length;
+            g_log.queue_count++;
+            ql_cond_signal(g_log.queue_cond);
+        }
+        ql_mutex_unlock(g_log.queue_mutex);
+    }
+    else
+    {
+        ql_log_emit(rendered, strlen(rendered));
+
+        /* A fatal record is the last one before something goes wrong, so it
+         * must not sit in a buffer. Ordinary records rely on ql_log_flush(). */
+        if (level == QL_LOG_FATAL && g_log.file != NULL)
+        {
+            (void)fflush(g_log.file);
+        }
     }
 
     ql_mutex_unlock(g_log.mutex);

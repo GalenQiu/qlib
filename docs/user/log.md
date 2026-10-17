@@ -133,6 +133,38 @@ convention.
 buffered, so a crash may lose the last few lines; `QL_LOG_FATAL` flushes on its
 own, since it is the record you most want to survive.
 
+## Asynchronous logging
+
+```c
+ql_log_async_enable(256);    /* a writer thread and a 256-record queue */
+QLOG_INFO("this returns without touching the file");
+ql_log_async_flush();        /* everything queued has now been written */
+ql_log_async_enable(0);      /* drain, join, back to synchronous */
+```
+
+Producers format a record and copy it into the queue; they never wait for file
+I/O. That is the whole point: a logger must not become the reason a program
+stalls.
+
+**When the queue is full the record is dropped and counted**, not buffered
+without limit and not written synchronously. `ql_log_async_dropped()` says how
+many. A record is therefore always either written or counted — the test asserts
+exactly that sum, because "drops happen" is not something a test can check
+without being flaky.
+
+Records keep their order. Because a record is bounded by `QL_LOG_LINE_MAX`, the
+queue's memory is known up front: `capacity * QL_LOG_LINE_MAX` bytes.
+
+| Call | Effect |
+|---|---|
+| `ql_log_async_enable(n)` | Start the writer with @p n slots; `QL_ERR_BUSY` if already on |
+| `ql_log_async_enable(0)` | Stop and drain, then join; back to synchronous |
+| `ql_log_async_flush()` | Wait until the queue is empty and the writer is idle |
+| `ql_log_async_dropped()` | Records lost to a full queue |
+
+`ql_log_shutdown()` stops asynchronous mode first, so a program that shuts down
+cleanly does not lose what was queued.
+
 ## Shutdown
 
 ```c

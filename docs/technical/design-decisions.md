@@ -204,7 +204,9 @@ An expired condition-variable wait is `QL_ERR_TIMEOUT` on both platforms, but th
 
 *It requires the threading module.* `QLIB_BUILD_LOG` without `QLIB_BUILD_THREADS` is a configure error, because the logger takes a mutex. A logger that interleaves half-lines between threads is worse than no logger, and making the mutex optional would mean the safe configuration is the one nobody tests.
 
-*What was left out, and why.* Asynchronous logging, syslog, and thread-local structured fields are all deferred. The first two need work that this slice does not: async needs a ring queue and a writer thread, syslog is POSIX-only. Structured fields need thread-local storage, which the threading module does not yet provide. JSON output was kept, because once formatting exists it is self-contained.
+*What was left out, and why.* Syslog and thread-local structured fields are still deferred: syslog would put the first `#ifdef` into a module that currently has none, and structured fields need thread-local storage that the threading module does not provide.
+
+Asynchronous logging was built, and its shape follows from the same reasoning as the rest. Producers format a record and copy it into a fixed-size queue, never waiting for I/O; when the queue is full the record is **dropped and counted**, because a logger that grows without bound turns a diagnostic into an out-of-memory failure. The queue has its own mutex, so a producer never waits for the writer's file I/O, and the writer never holds the queue mutex while taking the state mutex — that ordering is what keeps the two from deadlocking.
 
 **Consequences.** `src/ql_log.c` contains **no `#ifdef` at all** — everything it needs is C11. That is not an accident either: colour is explicit rather than sniffing for a terminal (which needs `isatty`, a POSIX call), and the timestamp uses `localtime()`/`gmtime()` under the logger's own mutex rather than the POSIX reentrant variants. A module with no platform code cannot fail on a platform it was never compiled for, which is worth more than automatic colour.
 

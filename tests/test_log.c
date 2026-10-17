@@ -47,6 +47,28 @@ static void log_to_file(const char* path)
     ql_log_set_level(QL_LOG_INFO);
 }
 
+/** @brief Count the lines in a file; -1 if it cannot be read. */
+static long count_lines(const char* path)
+{
+    FILE* file = fopen(path, "rb");
+    long lines = 0;
+    int c;
+
+    if (file == NULL)
+    {
+        return -1;
+    }
+    while ((c = fgetc(file)) != EOF)
+    {
+        if (c == '\n')
+        {
+            lines++;
+        }
+    }
+    (void)fclose(file);
+    return lines;
+}
+
 /* ---------------------------------------------------------------------------
  * Tests
  * ------------------------------------------------------------------------ */
@@ -278,6 +300,126 @@ MU_TEST(test_no_leaks)
     (void)remove(LOG_PATH);
 }
 
+MU_TEST(test_async_delivers_every_record_in_order)
+{
+    char buffer[8192];
+    int i;
+
+    log_to_file(LOG_PATH);
+    MU_ASSERT(ql_log_async_enable(64) == QL_OK);
+
+    for (i = 0; i < 50; i++)
+    {
+        QL_LOG_INFO("async record %d", i);
+    }
+    ql_log_async_flush();
+    MU_CHECK(ql_log_async_dropped() == 0);
+    MU_ASSERT(ql_log_flush() == QL_OK);
+
+    MU_ASSERT(read_file(LOG_PATH, buffer, sizeof buffer) > 0);
+    /* Every record arrived, and each appears after the one before it. */
+    {
+        const char* p = buffer;
+        int expected = 0;
+
+        for (;;)
+        {
+            char needle[32];
+            const char* found;
+
+            (void)snprintf(needle, sizeof needle, "async record %d", expected);
+            found = strstr(p, needle);
+            if (found == NULL)
+            {
+                break;
+            }
+            p = found + 1;
+            expected++;
+        }
+        MU_CHECK(expected == 50);
+    }
+
+    MU_ASSERT(ql_log_async_enable(0) == QL_OK);
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
+MU_TEST(test_async_never_loses_records_silently)
+{
+    enum
+    {
+        RECORDS = 200,
+    };
+    long written;
+    long dropped;
+    int i;
+
+    log_to_file(LOG_PATH);
+    /*
+     * One slot, so records are dropped: what matters is that each record is
+     * either written or counted, never simply lost. Asserting the sum is
+     * exact, which a test of "dropped > 0" could not do without being flaky.
+     */
+    MU_ASSERT(ql_log_async_enable(1) == QL_OK);
+
+    for (i = 0; i < RECORDS; i++)
+    {
+        QL_LOG_INFO("overflow record %d", i);
+    }
+    ql_log_async_flush();
+    MU_ASSERT(ql_log_flush() == QL_OK);
+
+    written = count_lines(LOG_PATH);
+    dropped = (long)ql_log_async_dropped();
+    MU_CHECK(written >= 0);
+    MU_CHECK(dropped >= 0);
+    MU_CHECK(written + dropped == RECORDS);
+
+    MU_ASSERT(ql_log_async_enable(0) == QL_OK);
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
+MU_TEST(test_disable_drains_the_queue)
+{
+    long written;
+    int i;
+
+    log_to_file(LOG_PATH);
+    MU_ASSERT(ql_log_async_enable(64) == QL_OK);
+    for (i = 0; i < 20; i++)
+    {
+        QL_LOG_INFO("drain record %d", i);
+    }
+
+    /* Disabling joins the writer, which drains what is queued first. The file
+     * still has to be flushed: the writer wrote through a buffered FILE, and
+     * count_lines opens the path separately. */
+    MU_ASSERT(ql_log_async_enable(0) == QL_OK);
+    MU_ASSERT(ql_log_flush() == QL_OK);
+    written = count_lines(LOG_PATH);
+    MU_CHECK(written == 20);
+
+    /* Back to synchronous, and still writing. */
+    QL_LOG_INFO("synchronous again");
+    MU_ASSERT(ql_log_flush() == QL_OK);
+    MU_CHECK(count_lines(LOG_PATH) == 21);
+
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
+MU_TEST(test_async_rejects_a_second_enable)
+{
+    log_to_file(LOG_PATH);
+    MU_ASSERT(ql_log_async_enable(8) == QL_OK);
+    MU_CHECK(ql_log_async_enable(8) == QL_ERR_BUSY);
+    MU_ASSERT(ql_log_async_enable(0) == QL_OK);
+    MU_CHECK(ql_log_async_dropped() == 0);
+    ql_log_shutdown();
+    (void)remove(LOG_PATH);
+}
+
 MU_TEST_SUITE(test_suite_log)
 {
     MU_RUN_TEST(test_init_is_idempotent);
@@ -290,5 +432,9 @@ MU_TEST_SUITE(test_suite_log)
     MU_RUN_TEST(test_json_format_and_escaping);
     MU_RUN_TEST(test_rotation_moves_the_file_aside);
     MU_RUN_TEST(test_null_and_edge_arguments);
+    MU_RUN_TEST(test_async_delivers_every_record_in_order);
+    MU_RUN_TEST(test_async_never_loses_records_silently);
+    MU_RUN_TEST(test_disable_drains_the_queue);
+    MU_RUN_TEST(test_async_rejects_a_second_enable);
     MU_RUN_TEST(test_no_leaks);
 }

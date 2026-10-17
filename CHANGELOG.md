@@ -62,7 +62,7 @@ frozen.
 
 - A minunit harness with a self-check (`tests/selftest/`) that fails when the
   harness itself stops reporting failures.
-- 116 unit tests on the default build, 136 with the threading and logging modules enabled, and 95 with the network module disabled.
+- 140 unit tests with the threading and logging modules, 125 with threads but no logger, 116 on the default build, and 95 with the network module disabled.
 - Six libFuzzer targets: `fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
 - Sixteen micro-benchmark cases across the containers, memory and address handling.
 - `ci/check.sh`, running the whole local matrix in eleven steps and
@@ -90,8 +90,8 @@ analysis.
   rather than mis-parsed, and `ql_net_addr_t` already has room for it.
 - Concurrency is opt-in (`QLIB_BUILD_THREADS`) and minimal: threads, a mutex and
   a condition variable. No thread pool, no read-write lock, no atomics. Sockets
-  are still blocking, and there is still no asynchronous API -- the threading
-  layer is what would make one possible, not the async API itself.
+  are still blocking. The logger does have an asynchronous mode, which is what
+  the threading layer was for.
 - C11 `<threads.h>` is not used, because macOS does not ship it.
 - `ql_allocator_t`'s `realloc` takes only `(ptr, size, userdata)`, so it cannot
   use the old size. Callers needing a realloc that knows the old size should
