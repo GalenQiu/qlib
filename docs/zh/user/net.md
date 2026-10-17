@@ -5,7 +5,10 @@
 外部库——它只是对字符串做纯计算，因此在 qlib 支持的每个平台上行为一致，测试时
 也不需要网络。
 
-socket、DNS 以及 Windows 所需的 socket 库启动都还不在这里。
+地址处理不需要网络、不需要平台初始化、也不需要链接任何外部库。TCP socket
+三样都需要，因此它是下面独立的一节，而地址那一半在没有它时照常工作。
+
+DNS 与 IPv6 socket 仍然不在，这是刻意的；原因见下面的 **TCP socket** 一节。
 
 > 该模块是可选模块。以 `QLIB_BUILD_NET=OFF` 配置的构建会把它整体省略，此时
 > `<qlib/ql_net.h>` 也不会被安装。两种配置下包含 `<qlib/qlib.h>` 都能正常工作。
@@ -137,6 +140,93 @@ int main(void)
 203.0.113.7 family=1
 equal to itself
 ```
+
+## TCP socket
+
+socket 只用 IPv4，是阻塞的，而且没有 DNS：用 `ql_net_addr_parse()` 构造一个
+`ql_net_addr_t`，再连接到它。整个设计刻意就到此为止。非阻塞 I/O 要么需要线程、
+要么需要事件循环，而 qlib 两者都还没有；域名解析需要一套关于超时与取消的策略，
+而本库无法兑现。这两者都是不提供，而不是只做一半。
+
+| 函数 | 用途 |
+|---|---|
+| `ql_net_tcp_listen` | 绑定并监听；端口传 0 由系统选择 |
+| `ql_net_tcp_connect` | 连接到正在监听的 socket |
+| `ql_net_accept` | 取出下一个待处理的连接 |
+| `ql_net_send` / `ql_net_recv` | 搬运字节 |
+| `ql_net_local_port` | 读回已绑定的端口 |
+| `ql_net_set_timeout` | 为阻塞等待设定上限，单位为毫秒 |
+| `ql_net_socket_close` | 关闭并释放一个 socket |
+
+socket 要求平台的 socket 层已经启动，在 Windows 上这意味着 `WSAStartup()`。每个
+socket 函数都会自己调用 `ql_net_init()`，因此这件事已经替你处理好了；在启动时显式
+调用它，只是把一次平台失败挪到你能够掌控的位置。`ql_net_shutdown()` 是可选的。
+
+### 回环往返
+
+```c
+#include <qlib/ql_net.h>
+#include <stdio.h>
+
+int main(void)
+{
+    ql_net_addr_t loopback;
+    ql_net_socket_t* listener = NULL;
+    ql_net_socket_t* client = NULL;
+    ql_net_socket_t* server = NULL;
+    uint16_t port = 0;
+    size_t moved = 0;
+    char buffer[16];
+
+    if (ql_net_addr_parse("127.0.0.1", &loopback) != QL_OK) { return 1; }
+    if (ql_net_tcp_listen(NULL, &loopback, 0, 4, &listener) != QL_OK) { return 1; }
+    if (ql_net_local_port(listener, &port) != QL_OK) { return 1; }
+
+    if (ql_net_tcp_connect(NULL, &loopback, port, &client) != QL_OK) { return 1; }
+    if (ql_net_accept(listener, &server) != QL_OK) { return 1; }
+
+    if (ql_net_send(client, "ping", 4, &moved) != QL_OK) { return 1; }
+    if (ql_net_recv(server, buffer, sizeof buffer, &moved) != QL_OK) { return 1; }
+
+    printf("server read %zu bytes\n", moved);
+
+    ql_net_socket_close(server);
+    ql_net_socket_close(client);
+    ql_net_socket_close(listener);
+    return 0;
+}
+```
+
+```
+server read 4 bytes
+```
+
+在端口 0 上监听、再把端口读回来，是测试在不硬编码端口的前提下取得端口的办法，
+该模块自己的测试正是这么做的。
+
+### 三条容易弄错的规则
+
+**短写不是错误。** 内核可能只接受比你给出的更少的字节；`out_sent` 会说明接受了
+多少。用剩下的部分再次调用即可。把 `out_sent < len` 当作失败，会在负载下丢失
+数据。
+
+**收到零字节意味着对端干净地关闭了连接。** 在流结束时，`ql_net_recv` 返回 `QL_OK`，
+且 `*out_received == 0`。这是 POSIX 的约定，不是失败；socket 循环正是以此作为终止
+条件。
+
+**超时表现为 `QL_ERR_AGAIN`，而不是 `QL_ERR_TIMEOUT`。** Linux 与 macOS 对到期的
+`SO_RCVTIMEO` 返回 `EAGAIN`，而没有 `poll()` 这一层，就无法把它与"缓冲区已满"区分
+开。请把 `QL_ERR_AGAIN` 当作"这段时间里没有东西到达"。Windows 确实会报告
+`WSAETIMEDOUT`，它映射为 `QL_ERR_TIMEOUT`。
+
+`ql_net_tcp_listen` 会设置 `SO_REUSEADDR`，因此重启服务器时不会撞上它先前那些连接
+遗留的 `TIME_WAIT`。
+
+### 代价
+
+TCP 这一半是本库**唯一的链接依赖**：Windows 上的 `ws2_32`。这就是为什么整个模块都
+放在 `QLIB_BUILD_NET` 之后，也是为什么地址这一半被记录为完全不需要任何东西。以
+`QLIB_BUILD_NET=OFF` 构建时，既没有 socket 代码，也没有依赖。
 
 ## 错误码
 

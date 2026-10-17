@@ -26,14 +26,18 @@ frozen.
   path that accepts embedded NUL bytes and supports appending a string to
   itself.
 - `ql_hash` — a hash table of fixed size keys to fixed size values: open
-  addressing with linear probing, tombstones for deletion, and an iterator that
+  addressing with linear probing, tombstones for deletion, `ql_hash_reserve()`
+  to size it up front so that known workloads never rehash, and an iterator that
   allocates nothing.
 - `ql_list` — a doubly linked list whose node handles stay valid while other
   nodes come and go, giving constant time removal from anywhere.
 - `ql_vector` — an opaque, growable, contiguous array, with an aliasing guard
   that makes `ql_vector_push_back(v, ql_vector_at(v, 0))` defined behaviour.
 - `ql_net` *(optional)* — `ql_net_addr_t` and textual IPv4 parsing, formatting
-  and comparison. No sockets, no DNS, no platform initialisation.
+  and comparison; plus `ql_net_socket_t` and blocking IPv4 TCP sockets
+  (`listen`, `connect`, `accept`, `send`, `recv`, timeouts). No DNS, no
+  non-blocking I/O, no IPv6 sockets. The only link dependency in the library:
+  `ws2_32` on Windows, and only when the module is built.
 
 #### Build
 
@@ -50,7 +54,7 @@ frozen.
 
 - A minunit harness with a self-check (`tests/selftest/`) that fails when the
   harness itself stops reporting failures.
-- 106 unit tests, and 93 when the optional network module is disabled.
+- 115 unit tests, and 95 when the optional network module is disabled.
 - Six libFuzzer targets: `fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
 - Sixteen micro-benchmark cases across the containers, memory and address handling.
 - `ci/check.sh`, running the whole local matrix in eleven steps and
@@ -79,6 +83,8 @@ analysis.
 - There is no concurrency support: no threads, no locks. `ql_lock_t` was
   removed rather than left as an unimplemented promise, because macOS has no
   C11 `<threads.h>` and a POSIX+Win32 implementation needs testing on both.
+  This is also why sockets are blocking: an asynchronous API needs either a
+  thread or an event loop to have a testing story at all.
 - `ql_allocator_t`'s `realloc` takes only `(ptr, size, userdata)`, so it cannot
   use the old size. Callers needing a realloc that knows the old size should
   allocate-copy-free.

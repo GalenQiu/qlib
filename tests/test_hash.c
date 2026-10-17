@@ -391,6 +391,84 @@ MU_TEST(test_iteration_visits_every_entry_once)
     ql_hash_destroy(hash);
 }
 
+MU_TEST(test_reserve_avoids_rehashing)
+{
+    enum
+    {
+        COUNT = 200,
+    };
+    tracking_state state;
+    ql_allocator_t alloc;
+    ql_hash_t* hash = NULL;
+    size_t allocations_before;
+    uint32_t i;
+
+    tracking_init(&state);
+    alloc = make_tracking_allocator(&state);
+    MU_ASSERT(ql_hash_create(&alloc, sizeof(uint32_t), sizeof(uint32_t), &hash) == QL_OK);
+
+    MU_ASSERT(ql_hash_reserve(hash, COUNT) == QL_OK);
+    MU_CHECK(ql_hash_capacity(hash) >= COUNT);
+
+    allocations_before = state.total_allocs;
+    for (i = 0; i < COUNT; i++)
+    {
+        uint32_t value = i * 5U;
+
+        MU_ASSERT(ql_hash_set(hash, &i, &value) == QL_OK);
+    }
+
+    /* The whole point of reserving: those inserts needed no new allocation. */
+    MU_CHECK(state.total_allocs == allocations_before);
+    MU_CHECK(ql_hash_size(hash) == COUNT);
+
+    for (i = 0; i < COUNT; i++)
+    {
+        uint32_t out = 0;
+
+        MU_ASSERT(ql_hash_get(hash, &i, &out) == QL_OK);
+        MU_CHECK(out == i * 5U);
+    }
+
+    ql_hash_destroy(hash);
+    MU_CHECK(state.live_blocks == 0);
+}
+
+MU_TEST(test_reserve_never_shrinks_and_keeps_entries)
+{
+    ql_hash_t* hash = NULL;
+    uint32_t i;
+    size_t capacity;
+
+    MU_ASSERT(ql_hash_create(NULL, sizeof(uint32_t), sizeof(uint32_t), &hash) == QL_OK);
+    for (i = 0; i < 5; i++)
+    {
+        uint32_t value = i;
+
+        MU_ASSERT(ql_hash_set(hash, &i, &value) == QL_OK);
+    }
+
+    capacity = ql_hash_capacity(hash);
+    MU_ASSERT(ql_hash_reserve(hash, 1) == QL_OK);
+    MU_CHECK(ql_hash_capacity(hash) == capacity);
+    MU_ASSERT(ql_hash_reserve(hash, 0) == QL_OK);
+    MU_CHECK(ql_hash_capacity(hash) == capacity);
+
+    /* Growing rehashes, which must keep every entry. */
+    MU_ASSERT(ql_hash_reserve(hash, 5000) == QL_OK);
+    MU_CHECK(ql_hash_capacity(hash) > capacity);
+    MU_CHECK(ql_hash_size(hash) == 5);
+    for (i = 0; i < 5; i++)
+    {
+        uint32_t out = 99;
+
+        MU_ASSERT(ql_hash_get(hash, &i, &out) == QL_OK);
+        MU_CHECK(out == i);
+    }
+
+    ql_hash_destroy(hash);
+}
+
 MU_TEST(test_clear_and_reuse)
 {
     ql_hash_t* hash = NULL;
@@ -433,6 +511,7 @@ MU_TEST(test_null_arguments_are_rejected)
     MU_CHECK(ql_hash_get(hash, NULL, &out) == QL_ERR_INVALID_ARG);
     MU_CHECK(ql_hash_remove(NULL, &key) == QL_ERR_INVALID_ARG);
     MU_CHECK(ql_hash_remove(hash, NULL) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_hash_reserve(NULL, 16) == QL_ERR_INVALID_ARG);
     MU_CHECK(!ql_hash_contains(hash, NULL));
     MU_CHECK(!ql_hash_contains(NULL, &key));
 
@@ -575,6 +654,8 @@ MU_TEST_SUITE(test_suite_hash)
     MU_RUN_TEST(test_many_entries_force_growth);
     MU_RUN_TEST(test_delete_and_reinsert_rounds);
     MU_RUN_TEST(test_iteration_visits_every_entry_once);
+    MU_RUN_TEST(test_reserve_avoids_rehashing);
+    MU_RUN_TEST(test_reserve_never_shrinks_and_keeps_entries);
     MU_RUN_TEST(test_clear_and_reuse);
     MU_RUN_TEST(test_null_arguments_are_rejected);
     MU_RUN_TEST(test_no_leaks);

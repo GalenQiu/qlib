@@ -12,18 +12,27 @@
  * source-level toggle rather than something that drags in a link dependency,
  * and it makes every code path testable without a network.
  *
+ * The module has two halves. Address handling is pure computation: it needs no
+ * network, no platform initialisation and no library to link. TCP sockets need
+ * all three -- Windows has to be told to start Winsock, and the socket library
+ * has to be linked -- so they sit behind QLIB_BUILD_NET and the address half
+ * keeps working without them.
+ *
  * Only IPv4 is implemented. IPv6 is reported as QL_ERR_NOT_SUPPORTED rather
  * than as a syntax error, and ql_net_addr_t already stores enough bytes for it,
  * so adding it later is not an ABI change.
  *
- * Sockets, DNS and the socket-library initialisation that Windows requires are
- * deliberately absent; see docs/technical/design-decisions.md.
+ * Sockets here are blocking, and there is no DNS: build a ql_net_addr_t with
+ * ql_net_addr_parse() and connect to it. See
+ * docs/technical/design-decisions.md for why.
  */
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "qlib/ql_common.h"
+#include "qlib/ql_mem.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -42,6 +51,15 @@ typedef enum
     QL_NET_AF_INET,       /**< IPv4. */
     QL_NET_AF_INET6,      /**< IPv6. Reserved: not parsed or formatted yet. */
 } ql_net_family_t;
+
+/**
+ * @brief An opaque TCP socket.
+ *
+ * Created by ql_net_tcp_listen() or ql_net_tcp_connect(), and closed with
+ * ql_net_socket_close(). Accepted connections are created by ql_net_accept()
+ * and are independent of the listener that produced them.
+ */
+typedef struct ql_net_socket ql_net_socket_t;
 
 /**
  * @brief Bytes needed for the longest textual address, terminator included.
@@ -106,6 +124,130 @@ QLIB_EXPORT ql_ret_t ql_net_addr_format(const ql_net_addr_t* addr, char* buf, si
  * Bytes beyond the family's length are not compared.
  */
 QLIB_NODISCARD QLIB_EXPORT bool ql_net_addr_equal(const ql_net_addr_t* a, const ql_net_addr_t* b);
+
+/**
+ * @brief Prepare the platform's socket layer.
+ *
+ * Windows requires `WSAStartup()` before any socket call; POSIX has no
+ * equivalent. Every socket function below calls this itself, so calling it
+ * explicitly is optional -- but doing so at startup surfaces a platform failure
+ * at a point the caller controls, instead of on the first connection.
+ *
+ * Idempotent. @return QL_OK, or QL_ERR_SYS if the platform refused to start.
+ */
+QLIB_EXPORT ql_ret_t ql_net_init(void);
+
+/**
+ * @brief Tear the platform's socket layer down.
+ *
+ * Optional: the operating system reclaims everything at exit. Call it before a
+ * deliberate re-initialisation, or from a test that wants a clean slate. Any
+ * socket still open at that point becomes unusable, so close them first.
+ */
+QLIB_EXPORT void ql_net_shutdown(void);
+
+/**
+ * @brief Listen for TCP connections on an address and port.
+ *
+ * @param alloc   Allocator, or NULL for the default one.
+ * @param addr    Local address to bind. Must be QL_NET_AF_INET.
+ * @param port    Port in host byte order. Pass 0 to let the system choose one,
+ *                then read it back with ql_net_local_port().
+ * @param backlog Pending connection queue length. Values below 1 become 1.
+ * @param out     Receives the listening socket. Set to NULL before any failure.
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_NOT_SUPPORTED for
+ *         IPv6, or QL_ERR_IO / QL_ERR_SYS from the platform.
+ *
+ * `SO_REUSEADDR` is set, so a server restarted immediately after a shutdown is
+ * not refused by the TIME_WAIT of its previous connections.
+ */
+QLIB_EXPORT ql_ret_t ql_net_tcp_listen(const ql_allocator_t* alloc, const ql_net_addr_t* addr, uint16_t port,
+                                       int backlog, ql_net_socket_t** out);
+
+/**
+ * @brief Connect to a TCP server.
+ *
+ * Blocking: returns once the connection is established or failed. There is no
+ * DNS, so @p addr must already be an address.
+ *
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_NOT_SUPPORTED for
+ *         IPv6, QL_ERR_IO when the peer refused or is unreachable, or
+ *         QL_ERR_SYS for anything unmapped.
+ */
+QLIB_EXPORT ql_ret_t ql_net_tcp_connect(const ql_allocator_t* alloc, const ql_net_addr_t* addr, uint16_t port,
+                                        ql_net_socket_t** out);
+
+/**
+ * @brief Accept the next pending connection.
+ *
+ * Blocking: returns once a connection arrives. Use ql_net_set_timeout() on the
+ * listener to bound the wait.
+ *
+ * The accepted socket inherits the listener's allocator. @return QL_OK,
+ * QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_AGAIN if nothing arrived in time, or
+ * QL_ERR_IO / QL_ERR_SYS from the platform.
+ */
+QLIB_EXPORT ql_ret_t ql_net_accept(const ql_net_socket_t* listener, ql_net_socket_t** out);
+
+/**
+ * @brief Send bytes.
+ *
+ * A short send is normal and not an error: @p out_sent receives how many bytes
+ * the kernel accepted, which may be fewer than @p len. Call again with the rest.
+ *
+ * @param sock     Open connection.
+ * @param data     Bytes to send. Must not be NULL unless @p len is 0.
+ * @param len      How many bytes to send.
+ * @param out_sent Receives the byte count the kernel accepted.
+ *
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_AGAIN if the send buffer is full,
+ *         or QL_ERR_IO / QL_ERR_SYS from the platform.
+ */
+QLIB_EXPORT ql_ret_t ql_net_send(ql_net_socket_t* sock, const void* data, size_t len, size_t* out_sent);
+
+/**
+ * @brief Receive bytes.
+ *
+ * @param sock         Open connection.
+ * @param buf          Destination buffer. Must not be NULL unless @p cap is 0.
+ * @param cap          Size of @p buf.
+ * @param out_received Receives the byte count. **Zero means the peer closed the
+ *                     connection cleanly** -- that is the POSIX convention and
+ *                     it is not an error.
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_AGAIN if nothing arrived within the
+ *         timeout (or the socket is non-blocking), or QL_ERR_IO / QL_ERR_SYS.
+ */
+QLIB_EXPORT ql_ret_t ql_net_recv(ql_net_socket_t* sock, void* buf, size_t cap, size_t* out_received);
+
+/**
+ * @brief Bound how long a blocking call may wait, in milliseconds.
+ *
+ * Applies to receive and send. 0 means "wait forever", which is the default.
+ *
+ * A timeout that expires is reported as QL_ERR_AGAIN rather than
+ * QL_ERR_TIMEOUT, because that is what Linux and macOS actually return for an
+ * expired `SO_RCVTIMEO` and it cannot be told apart from a full buffer.
+ *
+ * @return QL_OK, QL_ERR_INVALID_ARG, or QL_ERR_SYS if the platform rejected it.
+ */
+QLIB_EXPORT ql_ret_t ql_net_set_timeout(ql_net_socket_t* sock, int millis);
+
+/**
+ * @brief The local port a socket is bound to.
+ *
+ * The reason this exists: pass port 0 to ql_net_tcp_listen() and read back what
+ * the system chose.
+ *
+ * @return QL_OK, QL_ERR_INVALID_ARG, or QL_ERR_SYS.
+ */
+QLIB_EXPORT ql_ret_t ql_net_local_port(const ql_net_socket_t* sock, uint16_t* out_port);
+
+/**
+ * @brief Close a socket and free it.
+ *
+ * Passing NULL is a no-op, so a close can follow a failed create.
+ */
+QLIB_EXPORT void ql_net_socket_close(ql_net_socket_t* sock);
 
 #ifdef __cplusplus
 }

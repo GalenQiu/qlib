@@ -18,3 +18,4 @@ Description: @PROJECT_DESCRIPTION@
 Version: @PROJECT_VERSION@
 Cflags: -I${includedir}@QLIB_PC_DEFINES@
 Libs: -L${libdir} -lqlib
+Libs.private:@QLIB_PC_LIBS@

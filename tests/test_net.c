@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "test_alloc.h"
+
 /* ---------------------------------------------------------------------------
  * A local error-handler probe. The handler mechanism itself is covered by
  * test_mem; here it only has to prove that ql_net raises as well as returns.
@@ -321,6 +323,223 @@ MU_TEST(test_failures_are_raised_not_just_returned)
     ql_set_error_handler(NULL, NULL);
 }
 
+/* ---------------------------------------------------------------------------
+ * Sockets
+ *
+ * These run on loopback and need no peer thread: the kernel completes a
+ * connection into the listener's backlog before accept() is called, so
+ * connect-then-accept is deterministic in one thread. Every socket gets a
+ * timeout so that a bug fails the test instead of hanging CI.
+ * ------------------------------------------------------------------------ */
+
+#define NET_TIMEOUT_MS 2000
+
+/*
+ * Neither helper uses MU_ASSERT: it expands to a bare `return`, which a
+ * function returning a value cannot use. Callers assert on the result instead,
+ * and minunit reports against the caller's line, which is the line that needed
+ * the socket.
+ */
+
+/** @brief 127.0.0.1, or a zeroed address if parsing somehow fails. */
+static ql_net_addr_t loopback_address(void)
+{
+    ql_net_addr_t addr;
+
+    memset(&addr, 0, sizeof addr);
+    (void)ql_net_addr_parse("127.0.0.1", &addr);
+    return addr;
+}
+
+/** @brief A listening socket on an ephemeral loopback port, or NULL. */
+static ql_net_socket_t* make_listener(uint16_t* out_port)
+{
+    ql_net_addr_t addr = loopback_address();
+    ql_net_socket_t* listener = NULL;
+
+    if (ql_net_tcp_listen(NULL, &addr, 0, 4, &listener) != QL_OK)
+    {
+        return NULL;
+    }
+    if (ql_net_local_port(listener, out_port) != QL_OK || *out_port == 0 ||
+        ql_net_set_timeout(listener, NET_TIMEOUT_MS) != QL_OK)
+    {
+        ql_net_socket_close(listener);
+        return NULL;
+    }
+    return listener;
+}
+
+MU_TEST(test_listen_picks_a_port)
+{
+    ql_net_socket_t* listener;
+    uint16_t port = 0;
+
+    listener = make_listener(&port);
+    MU_ASSERT(listener != NULL);
+    MU_CHECK(port != 0);
+
+    ql_net_socket_close(listener);
+    ql_net_socket_close(NULL);
+}
+
+MU_TEST(test_loopback_round_trip)
+{
+    ql_net_addr_t addr = loopback_address();
+    ql_net_socket_t* listener;
+    ql_net_socket_t* client = NULL;
+    ql_net_socket_t* server = NULL;
+    uint16_t port = 0;
+    size_t moved = 0;
+    char buffer[16];
+
+    listener = make_listener(&port);
+    MU_ASSERT(listener != NULL);
+
+    /* Connect first: the kernel completes the handshake into the backlog, so
+     * the following accept() has something pending and cannot block. */
+    MU_ASSERT(ql_net_tcp_connect(NULL, &addr, port, &client) == QL_OK);
+    MU_ASSERT(ql_net_set_timeout(client, NET_TIMEOUT_MS) == QL_OK);
+
+    MU_ASSERT(ql_net_accept(listener, &server) == QL_OK);
+    MU_ASSERT(ql_net_set_timeout(server, NET_TIMEOUT_MS) == QL_OK);
+
+    /* Client sends first, so the server's recv has data waiting. */
+    MU_ASSERT(ql_net_send(client, "ping", 4, &moved) == QL_OK);
+    MU_CHECK(moved == 4);
+
+    memset(buffer, 0, sizeof buffer);
+    MU_ASSERT(ql_net_recv(server, buffer, sizeof buffer, &moved) == QL_OK);
+    MU_CHECK(moved == 4);
+    MU_CHECK(memcmp(buffer, "ping", 4) == 0);
+
+    /* And back the other way. */
+    MU_ASSERT(ql_net_send(server, "pong", 4, &moved) == QL_OK);
+    MU_CHECK(moved == 4);
+
+    memset(buffer, 0, sizeof buffer);
+    MU_ASSERT(ql_net_recv(client, buffer, sizeof buffer, &moved) == QL_OK);
+    MU_CHECK(moved == 4);
+    MU_CHECK(memcmp(buffer, "pong", 4) == 0);
+
+    ql_net_socket_close(server);
+    ql_net_socket_close(client);
+    ql_net_socket_close(listener);
+}
+
+MU_TEST(test_recv_reports_a_closed_peer_as_zero_bytes)
+{
+    ql_net_addr_t addr = loopback_address();
+    ql_net_socket_t* listener;
+    ql_net_socket_t* client = NULL;
+    ql_net_socket_t* server = NULL;
+    uint16_t port = 0;
+    size_t moved = 1;
+    char buffer[8];
+
+    listener = make_listener(&port);
+    MU_ASSERT(listener != NULL);
+    MU_ASSERT(ql_net_tcp_connect(NULL, &addr, port, &client) == QL_OK);
+    MU_ASSERT(ql_net_accept(listener, &server) == QL_OK);
+    MU_ASSERT(ql_net_set_timeout(server, NET_TIMEOUT_MS) == QL_OK);
+
+    ql_net_socket_close(client);
+
+    /* An orderly shutdown is QL_OK with nothing read, not an error. */
+    MU_CHECK(ql_net_recv(server, buffer, sizeof buffer, &moved) == QL_OK);
+    MU_CHECK(moved == 0);
+
+    ql_net_socket_close(server);
+    ql_net_socket_close(listener);
+}
+
+MU_TEST(test_connect_to_a_closed_port_is_io)
+{
+    ql_net_addr_t addr = loopback_address();
+    ql_net_socket_t* listener;
+    ql_net_socket_t* client = NULL;
+    uint16_t port = 0;
+
+    /* Take a port, then give it back: nothing is listening on it now. */
+    listener = make_listener(&port);
+    MU_ASSERT(listener != NULL);
+    ql_net_socket_close(listener);
+
+    MU_CHECK(ql_net_tcp_connect(NULL, &addr, port, &client) == QL_ERR_IO);
+    MU_CHECK(client == NULL);
+}
+
+MU_TEST(test_accept_times_out_instead_of_blocking)
+{
+    ql_net_socket_t* listener;
+    ql_net_socket_t* server = NULL;
+    uint16_t port = 0;
+
+    listener = make_listener(&port);
+    MU_ASSERT(listener != NULL);
+    MU_ASSERT(ql_net_set_timeout(listener, 100) == QL_OK);
+
+    /* Nothing is pending, so the wait expires and reports itself. */
+    MU_CHECK(ql_net_accept(listener, &server) == QL_ERR_AGAIN);
+    MU_CHECK(server == NULL);
+
+    ql_net_socket_close(listener);
+}
+
+MU_TEST(test_socket_rejects_bad_arguments)
+{
+    ql_net_addr_t addr = loopback_address();
+    ql_net_addr_t v6;
+    ql_net_socket_t* sock = (ql_net_socket_t*)&g_probe;
+    size_t moved = 0;
+    char buffer[4];
+    uint16_t port = 0;
+
+    memset(&v6, 0, sizeof v6);
+    v6.family = QL_NET_AF_INET6;
+
+    MU_CHECK(ql_net_tcp_listen(NULL, NULL, 0, 1, &sock) == QL_ERR_INVALID_ARG);
+    MU_CHECK(sock == NULL);
+    MU_CHECK(ql_net_tcp_listen(NULL, &addr, 0, 1, NULL) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_tcp_connect(NULL, NULL, 0, &sock) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_accept(NULL, &sock) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_send(NULL, "x", 1, &moved) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_recv(NULL, buffer, sizeof buffer, &moved) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_set_timeout(NULL, 10) == QL_ERR_INVALID_ARG);
+    MU_CHECK(ql_net_local_port(NULL, &port) == QL_ERR_INVALID_ARG);
+
+    /* IPv6 is refused rather than half-attempted. */
+    MU_CHECK(ql_net_tcp_listen(NULL, &v6, 0, 1, &sock) == QL_ERR_NOT_SUPPORTED);
+    MU_CHECK(ql_net_tcp_connect(NULL, &v6, 0, &sock) == QL_ERR_NOT_SUPPORTED);
+}
+
+MU_TEST(test_sockets_do_not_leak)
+{
+    tracking_state state;
+    ql_allocator_t alloc;
+    ql_net_addr_t addr = loopback_address();
+    ql_net_socket_t* listener = NULL;
+    ql_net_socket_t* client = NULL;
+    ql_net_socket_t* server = NULL;
+    uint16_t port = 0;
+
+    tracking_init(&state);
+    alloc = make_tracking_allocator(&state);
+
+    MU_ASSERT(ql_net_tcp_listen(&alloc, &addr, 0, 4, &listener) == QL_OK);
+    MU_ASSERT(ql_net_local_port(listener, &port) == QL_OK);
+    MU_ASSERT(ql_net_tcp_connect(&alloc, &addr, port, &client) == QL_OK);
+    MU_ASSERT(ql_net_accept(listener, &server) == QL_OK);
+
+    /* One control block per socket, nothing else. */
+    MU_CHECK(state.live_blocks == 3);
+
+    ql_net_socket_close(server);
+    ql_net_socket_close(client);
+    ql_net_socket_close(listener);
+    MU_CHECK(state.live_blocks == 0);
+}
+
 MU_TEST_SUITE(test_suite_net)
 {
     MU_RUN_TEST(test_parse_accepts_valid_addresses);
@@ -336,4 +555,11 @@ MU_TEST_SUITE(test_suite_net)
     MU_RUN_TEST(test_format_rejects_bad_arguments_and_families);
     MU_RUN_TEST(test_equality);
     MU_RUN_TEST(test_failures_are_raised_not_just_returned);
+    MU_RUN_TEST(test_listen_picks_a_port);
+    MU_RUN_TEST(test_loopback_round_trip);
+    MU_RUN_TEST(test_recv_reports_a_closed_peer_as_zero_bytes);
+    MU_RUN_TEST(test_connect_to_a_closed_port_is_io);
+    MU_RUN_TEST(test_accept_times_out_instead_of_blocking);
+    MU_RUN_TEST(test_socket_rejects_bad_arguments);
+    MU_RUN_TEST(test_sockets_do_not_leak);
 }

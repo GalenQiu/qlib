@@ -25,7 +25,7 @@ qlib/qlib.h                     umbrella header: every public header below
 ├── ql_hash.h                   → ql_common.h, ql_mem.h
 ├── ql_list.h                   → ql_common.h, ql_mem.h
 ├── ql_vector.h                 → ql_common.h, ql_mem.h
-└── ql_net.h                    → ql_common.h          (optional module)
+└── ql_net.h                    → ql_common.h, ql_mem.h  (optional module)
 
 src/ql_internal.h               private, not installed
 ├── ql_common.c                 defines ql_err_raise()
@@ -47,7 +47,7 @@ Dependencies point in one direction only: every container depends on `ql_mem`, `
 | `ql_str` | `ql_str_t`, the growth policy that keeps it NUL terminated, and the append and format paths | Nothing else: it stores bytes and knows nothing about text encodings. |
 | `ql_hash` | `ql_hash_t`, the FNV-1a hash, the probing and tombstone policy, and rehashing | What a key means. It compares bytes with `memcmp`, so a struct key with padding is the caller's problem. |
 | `ql_list` | `ql_list_t`, `ql_list_node_t`, and the linking, unlinking and node allocation | Stable handles are the point; anything that needs indexing should use `ql_vector`. |
-| `ql_net` | `ql_net_addr_t` and `ql_net_family_t`, textual IPv4 parsing, formatting and comparison | Any allocation (it allocates nothing), and anything needing a socket, a name lookup or platform initialisation. |
+| `ql_net` | `ql_net_addr_t` and `ql_net_family_t`, textual IPv4 parsing, formatting and comparison; `ql_net_socket_t` and the TCP calls over it | DNS, IPv6 sockets, and anything asynchronous. The address half allocates nothing; a socket is one control block. |
 
 Two rules keep the layering intact:
 
@@ -66,7 +66,7 @@ Each public header is self-contained: including it alone is enough to use its de
 | [`ql_hash.h`](../../include/qlib/ql_hash.h) | `<stdbool.h>`, `<stddef.h>`, `ql_common.h`, `ql_mem.h` | `ql_hash_t`, `ql_hash_iter_t` |
 | [`ql_list.h`](../../include/qlib/ql_list.h) | `<stdbool.h>`, `<stddef.h>`, `ql_common.h`, `ql_mem.h` | `ql_list_t`, `ql_list_node_t` |
 | [`ql_vector.h`](../../include/qlib/ql_vector.h) | `<stdbool.h>`, `<stddef.h>`, `ql_common.h`, `ql_mem.h` | `ql_vector_t` |
-| [`ql_net.h`](../../include/qlib/ql_net.h) | `<stdbool.h>`, `<stddef.h>`, `ql_common.h` | `ql_net_addr_t`, address parsing and formatting |
+| [`ql_net.h`](../../include/qlib/ql_net.h) | `<stdbool.h>`, `<stddef.h>`, `<stdint.h>`, `ql_common.h`, `ql_mem.h` | `ql_net_addr_t`, `ql_net_socket_t`, address handling and TCP sockets |
 | [`qlib.h`](../../include/qlib/qlib.h) | all of the above, `ql_net.h` only when `QLIB_HAS_NET` is defined | umbrella convenience header |
 
 `ql_net.h` is optional: a build configured with `QLIB_BUILD_NET=OFF` neither compiles its source nor installs it, which is why the umbrella header guards the include. The mechanics are in [build system](build-system.md).

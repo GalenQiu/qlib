@@ -49,7 +49,9 @@ EXCLUDE                = @PROJECT_SOURCE_DIR@/src \
                          @PROJECT_SOURCE_DIR@/README.md \
                          @PROJECT_SOURCE_DIR@/tests \
                          @PROJECT_SOURCE_DIR@/fuzz \
-                         @PROJECT_SOURCE_DIR@/bench
+                         @PROJECT_SOURCE_DIR@/bench \
+                         @PROJECT_SOURCE_DIR@/ci \
+                         @PROJECT_SOURCE_DIR@/xlog
 EXCLUDE_PATTERNS       = */docs/html/* */docs/latex/* */build*/* */ci/*
 
 # ---------------------------------------------------------------------------

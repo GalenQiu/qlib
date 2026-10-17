@@ -159,8 +159,19 @@ endif()
 if(QLIB_BUILD_NET)
     target_compile_definitions(qlib PUBLIC QLIB_HAS_NET)
     set(QLIB_PC_DEFINES " -DQLIB_HAS_NET")
+
+    # The TCP half of the network module is the library's first link
+    # dependency: Winsock lives in ws2_32. PUBLIC rather than PRIVATE because
+    # a consumer of the static library has to link it too.
+    if(WIN32)
+        target_link_libraries(qlib PUBLIC ws2_32)
+        set(QLIB_PC_LIBS " -lws2_32")
+    else()
+        set(QLIB_PC_LIBS "")
+    endif()
 else()
     set(QLIB_PC_DEFINES "")
+    set(QLIB_PC_LIBS "")
 endif()
 
 set_target_properties(qlib PROPERTIES

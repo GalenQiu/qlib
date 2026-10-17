@@ -106,6 +106,21 @@ QLIB_NODISCARD QLIB_EXPORT bool ql_hash_contains(const ql_hash_t* hash, const vo
 QLIB_EXPORT ql_ret_t ql_hash_remove(ql_hash_t* hash, const void* key);
 
 /**
+ * @brief Grow the table so that @p min_entries can be inserted without rehashing.
+ *
+ * @p min_entries is a number of entries, not slots: the table keeps a quarter
+ * of its slots free, so it asks for enough slots to hold that many. Never
+ * shrinks, and drops tombstones as a side effect of the rehash.
+ *
+ * Reserving is worth doing when the size is known up front, because inserting
+ * one at a time rehashes repeatedly as the table doubles.
+ *
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_NOMEM or QL_ERR_OVERFLOW. On
+ *         failure the table is unchanged.
+ */
+QLIB_EXPORT ql_ret_t ql_hash_reserve(ql_hash_t* hash, size_t min_entries);
+
+/**
  * @brief Remove every entry, keeping the allocation.
  *
  * Passing NULL is a no-op. This never fails.

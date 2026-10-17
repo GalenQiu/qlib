@@ -39,3 +39,8 @@ crash-*
 leak-*
 timeout-*
 oom-*
+
+# A logging library kept here for evaluation, not merged into qlib. Ignored so
+# that qlib's own tooling (Doxygen, clang-tidy, the link checker) does not scan a
+# tree that is not part of the library.
+xlog/

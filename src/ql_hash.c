@@ -396,6 +396,47 @@ ql_ret_t ql_hash_remove(ql_hash_t* hash, const void* key)
     return QL_OK;
 }
 
+ql_ret_t ql_hash_reserve(ql_hash_t* hash, size_t min_entries)
+{
+    size_t needed_slots;
+    size_t target;
+
+    if (hash == NULL)
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_hash_reserve: hash is NULL");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    /* Four slots per three entries keeps the load factor below the growth
+     * threshold, so a reserve() followed by that many inserts never rehashes. */
+    if (ql_size_mul_overflow(min_entries, 4, &needed_slots) || ql_size_add_overflow(needed_slots, 2, &needed_slots))
+    {
+        ql_err_raise(QL_ERR_OVERFLOW, "ql_hash_reserve: entry count overflow");
+        return QL_ERR_OVERFLOW;
+    }
+    needed_slots /= 3;
+
+    if (needed_slots <= hash->slot_capacity)
+    {
+        return QL_OK;
+    }
+
+    target = hash->slot_capacity < QL_HASH_MIN_CAPACITY ? QL_HASH_MIN_CAPACITY : hash->slot_capacity;
+    while (target < needed_slots)
+    {
+        size_t doubled;
+
+        if (ql_size_mul_overflow(target, 2, &doubled))
+        {
+            ql_err_raise(QL_ERR_OVERFLOW, "ql_hash_reserve: capacity overflow");
+            return QL_ERR_OVERFLOW;
+        }
+        target = doubled;
+    }
+
+    return ql_hash_rehash(hash, target);
+}
+
 void ql_hash_clear(ql_hash_t* hash)
 {
     if (hash == NULL)

@@ -20,7 +20,7 @@
 | 语言标准 | **恰好 C11，禁用编译器扩展**（`-std=c11`，不是 `gnu11`） |
 | 模块 | `ql_common`（错误/版本）、`ql_mem`（分配器）、`ql_str`（字符串）、`ql_hash`（哈希表）、`ql_list`（双向链表）、`ql_vector`（动态数组）、`ql_net`（IPv4 地址，可选） |
 | 公开头文件 | `ql_common.h`、`ql_mem.h`、`ql_str.h`、`ql_hash.h`、`ql_list.h`、`ql_vector.h`、`ql_net.h`、`qlib.h`（伞形） |
-| 单元测试 | **106 个**（关闭网络模块时 93 个） |
+| 单元测试 | **115 个**（关闭网络模块时 95 个） |
 | 模糊测试目标 | 6 个（`fuzz_str`、`fuzz_hash`、`fuzz_list`、`fuzz_vector`、`fuzz_mem`、`fuzz_net`） |
 | 基准测试用例 | 16 个 |
 | 本地验证 | `./ci/check.sh`，**11 个步骤** |
