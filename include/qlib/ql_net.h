@@ -214,8 +214,8 @@ QLIB_EXPORT ql_ret_t ql_net_send(ql_net_socket_t* sock, const void* data, size_t
  * @param out_received Receives the byte count. **Zero means the peer closed the
  *                     connection cleanly** -- that is the POSIX convention and
  *                     it is not an error.
- * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_AGAIN or QL_ERR_TIMEOUT if nothing
- *         arrived within the timeout, or QL_ERR_IO / QL_ERR_SYS.
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_TIMEOUT if nothing arrived within
+ *         the timeout, or QL_ERR_IO / QL_ERR_SYS.
  */
 QLIB_EXPORT ql_ret_t ql_net_recv(ql_net_socket_t* sock, void* buf, size_t cap, size_t* out_received);
 
@@ -224,11 +224,11 @@ QLIB_EXPORT ql_ret_t ql_net_recv(ql_net_socket_t* sock, void* buf, size_t cap, s
  *
  * Applies to receive and send. 0 means "wait forever", which is the default.
  *
- * An expired timeout is reported as QL_ERR_AGAIN on Linux and macOS, because
- * that is what an expired `SO_RCVTIMEO` returns there and it cannot be told
- * apart from a full buffer without a `poll()` layer. Windows reports
- * WSAETIMEDOUT, which maps to QL_ERR_TIMEOUT. Treat both as "nothing arrived in
- * time".
+ * The wait is implemented with `select()` rather than by setting
+ * `SO_RCVTIMEO`, so an expired timeout is QL_ERR_TIMEOUT on every platform.
+ * Leaving it to `SO_RCVTIMEO` would mean QL_ERR_AGAIN on Linux and macOS (where
+ * it cannot be told apart from a full buffer) and WSAETIMEDOUT on Windows, and
+ * on Windows it does not reliably interrupt `accept()` at all.
  *
  * @return QL_OK, QL_ERR_INVALID_ARG, or QL_ERR_SYS if the platform rejected it.
  */

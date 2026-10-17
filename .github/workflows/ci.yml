@@ -1,5 +1,12 @@
 name: CI
 
+# A superseded run is cancelled when a new commit arrives on the same ref. That
+# is the normal choice for a CI gate, and it matters here: a job stuck in a
+# blocking call otherwise holds the queue until GitHub's six-hour timeout.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]

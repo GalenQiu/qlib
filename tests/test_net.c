@@ -479,18 +479,43 @@ MU_TEST(test_accept_times_out_instead_of_blocking)
     MU_ASSERT(listener != NULL);
     MU_ASSERT(ql_net_set_timeout(listener, 100) == QL_OK);
 
-    /*
-     * Nothing is pending, so the wait expires. POSIX reports that as EAGAIN and
-     * Windows as WSAETIMEDOUT, so both answers are correct here; what matters
-     * is that it returned at all rather than blocking forever.
-     */
-    {
-        ql_ret_t rc = ql_net_accept(listener, &server);
-
-        MU_CHECK(rc == QL_ERR_AGAIN || rc == QL_ERR_TIMEOUT);
-    }
+    /* Nothing is pending, so the wait expires -- and it must expire, not block.
+     * qlib does the wait with select() precisely so this is the same answer
+     * everywhere. */
+    MU_CHECK(ql_net_accept(listener, &server) == QL_ERR_TIMEOUT);
     MU_CHECK(server == NULL);
 
+    ql_net_socket_close(listener);
+}
+
+MU_TEST(test_recv_times_out_when_nothing_arrives)
+{
+    ql_net_addr_t addr = loopback_address();
+    ql_net_socket_t* listener;
+    ql_net_socket_t* client = NULL;
+    ql_net_socket_t* server = NULL;
+    uint16_t port = 0;
+    size_t moved = 1;
+    char buffer[8];
+
+    listener = make_listener(&port);
+    MU_ASSERT(listener != NULL);
+    MU_ASSERT(ql_net_tcp_connect(NULL, &addr, port, &client) == QL_OK);
+    MU_ASSERT(ql_net_accept(listener, &server) == QL_OK);
+    MU_ASSERT(ql_net_set_timeout(server, 100) == QL_OK);
+
+    /* The client sent nothing, so the wait expires and says so. */
+    MU_CHECK(ql_net_recv(server, buffer, sizeof buffer, &moved) == QL_ERR_TIMEOUT);
+    MU_CHECK(moved == 0);
+
+    /* And the socket is still usable afterwards: the peer can still send. */
+    MU_ASSERT(ql_net_send(client, "ok", 2, &moved) == QL_OK);
+    MU_ASSERT(ql_net_set_timeout(server, NET_TIMEOUT_MS) == QL_OK);
+    MU_ASSERT(ql_net_recv(server, buffer, sizeof buffer, &moved) == QL_OK);
+    MU_CHECK(moved == 2);
+
+    ql_net_socket_close(server);
+    ql_net_socket_close(client);
     ql_net_socket_close(listener);
 }
 
@@ -568,6 +593,7 @@ MU_TEST_SUITE(test_suite_net)
     MU_RUN_TEST(test_recv_reports_a_closed_peer_as_zero_bytes);
     MU_RUN_TEST(test_connect_to_a_closed_port_is_io);
     MU_RUN_TEST(test_accept_times_out_instead_of_blocking);
+    MU_RUN_TEST(test_recv_times_out_when_nothing_arrives);
     MU_RUN_TEST(test_socket_rejects_bad_arguments);
     MU_RUN_TEST(test_sockets_do_not_leak);
 }

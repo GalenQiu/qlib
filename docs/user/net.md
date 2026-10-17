@@ -227,11 +227,12 @@ offered; `out_sent` says how many. Call again with the rest. Treating
 with `*out_received == 0` at end of stream. That is the POSIX convention and it
 is not a failure; a socket loop terminates on it.
 
-**An expired timeout is `QL_ERR_AGAIN` on Linux and macOS, `QL_ERR_TIMEOUT` on
-Windows.** POSIX returns `EAGAIN` for an expired `SO_RCVTIMEO` and it cannot be
-told apart from a full buffer without a `poll()` layer; Windows returns
-`WSAETIMEDOUT`. Treat both codes as "nothing arrived in time" rather than
-testing for one.
+**An expired timeout is `QL_ERR_TIMEOUT`, everywhere.** That is worth stating
+because it is not free: the obvious implementation — set `SO_RCVTIMEO` and let
+the kernel do it — reports `EAGAIN` on Linux and macOS (indistinguishable from a
+full buffer) and `WSAETIMEDOUT` on Windows, and on Windows it does not reliably
+interrupt `accept()` at all. qlib does the wait with `select()` instead, so one
+timeout means one error code on every platform.
 
 `ql_net_tcp_listen` sets `SO_REUSEADDR`, so restarting a server does not trip
 over the `TIME_WAIT` of its previous connections.

@@ -56,6 +56,8 @@ struct ql_net_socket
 {
     ql_allocator_t alloc;
     ql_net_handle_t handle;
+    /** Milliseconds a blocking wait may take; 0 means forever. */
+    int timeout_ms;
 };
 
 /** @brief Whether the platform socket layer has been started. */
@@ -348,6 +350,7 @@ static ql_ret_t ql_net_socket_wrap(const ql_allocator_t* alloc, ql_net_handle_t 
 
     sock->alloc = alloc != NULL ? *alloc : ql_default_allocator();
     sock->handle = handle;
+    sock->timeout_ms = 0;
 
     *out = sock;
     return QL_OK;
@@ -495,6 +498,51 @@ ql_ret_t ql_net_tcp_connect(const ql_allocator_t* alloc, const ql_net_addr_t* ad
     return QL_OK;
 }
 
+/**
+ * @brief Wait until a socket is ready, or the socket's timeout expires.
+ *
+ * The wait is done here rather than left to `SO_RCVTIMEO` because the platforms
+ * disagree about it: an expired receive timeout is `EAGAIN` on POSIX and
+ * `WSAETIMEDOUT` on Windows, and on Windows it does not reliably interrupt
+ * `accept()` at all -- which turns a bounded wait into a hung test run. `select`
+ * means one timeout, one error code, on every platform.
+ *
+ * @return QL_OK when ready, QL_ERR_TIMEOUT when the wait expired, or whatever
+ *         the platform reported.
+ */
+static ql_ret_t ql_net_wait(const ql_net_socket_t* sock, bool for_write)
+{
+    fd_set set;
+    struct timeval timeout;
+    struct timeval* limit = NULL;
+    int ready;
+
+    if (sock->timeout_ms <= 0)
+    {
+        /* Waiting forever: let the blocking call do the waiting. */
+        return QL_OK;
+    }
+
+    FD_ZERO(&set);
+    FD_SET(sock->handle, &set);
+
+    timeout.tv_sec = (time_t)(sock->timeout_ms / 1000);
+    timeout.tv_usec = (long)((sock->timeout_ms % 1000) * 1000);
+    limit = &timeout;
+
+    /* The first argument is ignored on Windows and is +1 on POSIX. */
+    ready = select((int)sock->handle + 1, for_write ? NULL : &set, for_write ? &set : NULL, NULL, limit);
+    if (ready == 0)
+    {
+        return QL_ERR_TIMEOUT;
+    }
+    if (ready < 0)
+    {
+        return ql_net_error_to_ret(ql_net_last_error());
+    }
+    return QL_OK;
+}
+
 ql_ret_t ql_net_accept(const ql_net_socket_t* listener, ql_net_socket_t** out)
 {
     ql_net_handle_t handle;
@@ -507,16 +555,23 @@ ql_ret_t ql_net_accept(const ql_net_socket_t* listener, ql_net_socket_t** out)
     }
     *out = NULL;
 
+    rc = ql_net_wait(listener, false);
+    if (rc != QL_OK)
+    {
+        /* A timeout is a normal answer, not a fault worth reporting. */
+        if (rc != QL_ERR_TIMEOUT)
+        {
+            ql_err_raise(rc, "ql_net_accept: waiting for a connection failed");
+        }
+        return rc;
+    }
+
     handle = accept(listener->handle, NULL, NULL);
     if (handle == QL_NET_INVALID_HANDLE)
     {
         ql_ret_t code = ql_net_error_to_ret(ql_net_last_error());
 
-        /* Nothing pending is not worth reporting; a timeout is a normal answer. */
-        if (code != QL_ERR_AGAIN)
-        {
-            ql_err_raise(code, "ql_net_accept: accept() failed");
-        }
+        ql_err_raise(code, "ql_net_accept: accept() failed");
         return code;
     }
 
@@ -551,6 +606,15 @@ ql_ret_t ql_net_send(ql_net_socket_t* sock, const void* data, size_t len, size_t
     if (chunk > (size_t)INT_MAX)
     {
         chunk = (size_t)INT_MAX;
+    }
+
+    {
+        ql_ret_t rc = ql_net_wait(sock, true);
+
+        if (rc != QL_OK)
+        {
+            return rc;
+        }
     }
 
     written = send(sock->handle, data, QL_NET_IO_LEN(chunk), 0);
@@ -591,6 +655,15 @@ ql_ret_t ql_net_recv(ql_net_socket_t* sock, void* buf, size_t cap, size_t* out_r
         chunk = (size_t)INT_MAX;
     }
 
+    {
+        ql_ret_t rc = ql_net_wait(sock, false);
+
+        if (rc != QL_OK)
+        {
+            return rc;
+        }
+    }
+
     got = recv(sock->handle, buf, QL_NET_IO_LEN(chunk), 0);
     if (got < 0)
     {
@@ -615,6 +688,10 @@ ql_ret_t ql_net_set_timeout(ql_net_socket_t* sock, int millis)
         ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_set_timeout: sock is NULL or millis is negative");
         return QL_ERR_INVALID_ARG;
     }
+
+    /* Recorded here, and enforced by ql_net_wait(); the setsockopt below is a
+     * backstop for calls that qlib does not wrap. */
+    sock->timeout_ms = millis;
 
 #ifdef _WIN32
     {
