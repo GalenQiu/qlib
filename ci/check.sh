@@ -242,11 +242,18 @@ step_fuzz() {
     CC=clang cmake -S . -B "$SCRATCH/fuzz" -DQLIB_BUILD_FUZZ=ON -DQLIB_WERROR=ON >/dev/null || return 1
     cmake --build "$SCRATCH/fuzz" >/dev/null || return 1
 
+    # Every target that was built, not a hard-coded list: this loop used to name
+    # three of the six and silently skipped the rest.
+    #
+    # -artifact_prefix keeps libFuzzer's crashing input inside the scratch tree.
+    # Its default is the working directory, which put crash-<sha1> files in the
+    # repository root.
     local target
-    for target in fuzz_vector fuzz_mem fuzz_net; do
-        [ -x "$SCRATCH/fuzz/bin/$target" ] || continue
-        echo "--- $target (${FUZZ_SECONDS}s) ---"
-        "$SCRATCH/fuzz/bin/$target" -max_total_time="$FUZZ_SECONDS" -max_len=256 || return 1
+    for target in "$SCRATCH"/fuzz/bin/fuzz_*; do
+        [ -x "$target" ] || continue
+        echo "--- $(basename "$target") (${FUZZ_SECONDS}s) ---"
+        "$target" -max_total_time="$FUZZ_SECONDS" -max_len=256 \
+            -artifact_prefix="$SCRATCH/fuzz/" || return 1
     done
     echo "all fuzz targets clean"
 }

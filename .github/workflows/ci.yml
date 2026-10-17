@@ -172,11 +172,19 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      # Every target that was built. This loop used to name two of the six, so
+      # four of them were never fuzzed in CI at all.
+      #
+      # -artifact_prefix keeps a crashing input inside build/, which is also
+      # what the upload step below collects.
       - name: Fuzz
+        shell: bash
         run: |
-          for target in fuzz_vector fuzz_mem; do
+          for target in build/bin/fuzz_*; do
+            [ -x "$target" ] || continue
             echo "=== $target ==="
-            ./build/bin/$target -max_total_time=60 -max_len=256 -print_final_stats=1
+            "$target" -max_total_time=60 -max_len=256 -print_final_stats=1 \
+              -artifact_prefix=build/ || exit 1
           done
 
       - name: Upload crashing input
@@ -186,10 +194,10 @@ jobs:
           name: fuzz-crash
           # Any of libFuzzer's artifact kinds, not just crashes.
           path: |
-            crash-*
-            oom-*
-            leak-*
-            timeout-*
+            build/crash-*
+            build/oom-*
+            build/leak-*
+            build/timeout-*
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
