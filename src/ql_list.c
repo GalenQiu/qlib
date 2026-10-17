@@ -4,23 +4,31 @@
 
 #include <string.h>
 
-/*
- * A node header followed by the element bytes.
- *
- * The header size is rounded up to a multiple of the strictest alignment, so
- * that the element would land on a properly aligned address if a future API
- * ever hands out a pointer to it. Today nothing does: elements only ever move
- * through memcpy, which is why the current API does not depend on the element
- * type's alignment at all.
- */
+/* A node header followed by the element bytes. */
 struct ql_list_node
 {
     struct ql_list_node* prev;
     struct ql_list_node* next;
 };
 
-#define QL_LIST_ALIGN _Alignof(max_align_t)
-#define QL_LIST_HEADER_SIZE ((sizeof(ql_list_node_t) + QL_LIST_ALIGN - 1) / QL_LIST_ALIGN * QL_LIST_ALIGN)
+/*
+ * The storage for the header. A union rather than a struct plus manual
+ * rounding: sizeof(union) is always a multiple of its alignment, so the element
+ * that follows lands on a properly aligned address if a future API ever hands
+ * out a pointer to it. Today nothing does -- elements only ever move through
+ * memcpy -- which is why the current API does not depend on the element type's
+ * alignment at all.
+ *
+ * `long double` rather than max_align_t keeps this to C89 constructs, so it
+ * cannot depend on which C11 features a particular compiler has switched on.
+ */
+typedef union
+{
+    ql_list_node_t node;
+    long double for_alignment;
+} ql_list_header;
+
+#define QL_LIST_HEADER_SIZE (sizeof(ql_list_header))
 
 struct ql_list
 {

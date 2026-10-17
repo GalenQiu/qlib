@@ -86,11 +86,30 @@ jobs:
       # cannot be run locally, so the only signal available is which step went
       # red: "Build library" means src/, "Build tests and benchmarks" means the
       # test or bench code.
+      #
+      # The diagnostics are also echoed as annotations. A job log needs admin
+      # rights to download through the API, but annotations are public, so this
+      # is what makes a Windows-only failure readable from a machine that
+      # cannot run MSVC.
       - name: Build library
-        run: cmake --build build --config Debug --target qlib --parallel
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! cmake --build build --config Debug --target qlib --parallel 2>&1 | tee build-library.log; then
+            grep -E "error C[0-9]+|error LNK|fatal error|warning C[0-9]+" build-library.log | head -6 |
+              while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          fi
 
       - name: Build tests and benchmarks
-        run: cmake --build build --config Debug --parallel
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! cmake --build build --config Debug --parallel 2>&1 | tee build-tests.log; then
+            grep -E "error C[0-9]+|error LNK|fatal error|warning C[0-9]+" build-tests.log | head -6 |
+              while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          fi
 
       - name: Test
         run: ctest --test-dir build -C Debug

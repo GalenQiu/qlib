@@ -8,6 +8,10 @@
 /* Smallest slot array; a power of two, which the masking below relies on. */
 #define QL_HASH_MIN_CAPACITY 8
 
+/* "No slot", used while probing. A local constant rather than SIZE_MAX so the
+ * value does not depend on which limit macros a platform's <stdint.h> exposes. */
+#define QL_HASH_NO_SLOT ((size_t)-1)
+
 /*
  * Slot tags.
  *
@@ -67,7 +71,7 @@ static uint64_t ql_hash_tag(const void* key, size_t key_size)
     uint64_t hash = ql_hash_bytes(key, key_size);
 
     /* 0 and 1 are reserved, so nudge the two hashes that could collide. */
-    if (hash < 2)
+    if (hash < UINT64_C(2))
     {
         hash += 3;
     }
@@ -86,7 +90,7 @@ static ql_hash_probe_result ql_hash_probe(const ql_hash_t* hash, const void* key
 {
     size_t mask = hash->slot_capacity - 1;
     size_t slot = (size_t)tag & mask;
-    size_t first_tombstone = SIZE_MAX;
+    size_t first_tombstone = QL_HASH_NO_SLOT;
     ql_hash_probe_result result;
 
     for (;;)
@@ -95,13 +99,13 @@ static ql_hash_probe_result ql_hash_probe(const ql_hash_t* hash, const void* key
 
         if (here == 0)
         {
-            result.slot = first_tombstone != SIZE_MAX ? first_tombstone : slot;
+            result.slot = first_tombstone != QL_HASH_NO_SLOT ? first_tombstone : slot;
             result.found = false;
             return result;
         }
         if (here == 1)
         {
-            if (first_tombstone == SIZE_MAX)
+            if (first_tombstone == QL_HASH_NO_SLOT)
             {
                 first_tombstone = slot;
             }
