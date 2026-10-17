@@ -409,6 +409,19 @@ void ql_log_set_utc(bool on)
  * File sink
  * ------------------------------------------------------------------------ */
 
+/** @brief Whether a path can be opened for reading. */
+static bool ql_log_file_exists(const char* path)
+{
+    FILE* probe = fopen(path, "rb");
+
+    if (probe == NULL)
+    {
+        return false;
+    }
+    (void)fclose(probe);
+    return true;
+}
+
 /**
  * @brief Shift backups down and start a fresh file.
  *
@@ -430,12 +443,25 @@ static void ql_log_rotate(void)
     for (index = g_log.rotation_backups - 1; index >= 1; index--)
     {
         (void)snprintf(from, sizeof from, "%s.%d", g_log.path, index);
+        if (!ql_log_file_exists(from))
+        {
+            continue;
+        }
+
         (void)snprintf(to, sizeof to, "%s.%d", g_log.path, index + 1);
+        /* rename() replaces an existing target on POSIX but fails on Windows,
+         * so the destination is removed first. Checking that the source exists
+         * keeps a missing backup from deleting the one below it. */
+        (void)remove(to);
         (void)rename(from, to);
     }
 
     (void)snprintf(to, sizeof to, "%s.1", g_log.path);
-    (void)rename(g_log.path, to);
+    if (ql_log_file_exists(g_log.path))
+    {
+        (void)remove(to);
+        (void)rename(g_log.path, to);
+    }
 
     g_log.file = fopen(g_log.path, "ab");
     g_log.written = 0;
