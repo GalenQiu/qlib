@@ -106,7 +106,10 @@ endif()
 # ql_vector (dynamic array). ql_net is optional and appended below.
 set(QLIB_SRC
     src/ql_common.c
+    src/ql_hash.c
+    src/ql_list.c
     src/ql_mem.c
+    src/ql_str.c
     src/ql_vector.c
 )
 

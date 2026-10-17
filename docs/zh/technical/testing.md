@@ -148,12 +148,15 @@ ctest 有一个内置的 `WILL_FAIL` 属性，可以反转测试结果，它显�
 
 ## 模糊测试
 
-共有三个 libFuzzer 模糊测试目标，它们都仅在 `QLIB_BUILD_FUZZ=ON` 且编译器为 Clang（`-fsanitize=fuzzer`）时构建。换用其他编译器时，[`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 会发出 `WARNING`，而不是悄无声息地什么都不产出。
+共有六个 libFuzzer 模糊测试目标，它们都仅在 `QLIB_BUILD_FUZZ=ON` 且编译器为 Clang（`-fsanitize=fuzzer`）时构建。换用其他编译器时，[`fuzz/CMakeLists.txt`](../../../fuzz/CMakeLists.txt) 会发出 `WARNING`，而不是悄无声息地什么都不产出。
 
 | 目标 | 守卫内容 |
 |---|---|
 | [`fuzz_vector.c`](../../../fuzz/fuzz_vector.c) | 容器 API：扩容、搬移，以及元素别名路径 |
 | [`fuzz_mem.c`](../../../fuzz/fuzz_mem.c) | `ql_mem` 中的算术：填充后的尺寸、对齐取整、溢出辅助函数 |
+| [`fuzz_str.c`](../../../fuzz/fuzz_str.c) | 字符串的长度约定、结尾符，以及把字符串追加给它自己 |
+| [`fuzz_hash.c`](../../../fuzz/fuzz_hash.c) | 删除与增长，逐步骤对照影子模型检查 |
+| [`fuzz_list.c`](../../../fuzz/fuzz_list.c) | 链接的对称性、长度计数器，以及成环 |
 | [`fuzz_net.c`](../../../fuzz/fuzz_net.c) | 地址解析器：往返不变量，以及对任意文本的干净拒绝 |
 
 ### `fuzz_mem`

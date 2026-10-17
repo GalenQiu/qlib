@@ -8,6 +8,9 @@ Cross platform: Linux / macOS / Windows, MIT license.
 ## Features
 - C11
 - `ql_vector`: an opaque, growable, contiguous array
+- `ql_str`: a growable, always NUL terminated byte string
+- `ql_hash`: a hash table of fixed size keys to fixed size values
+- `ql_list`: a doubly linked list with stable node handles
 - Abstract memory allocator, replaceable, with overflow checked array helpers
 - Unified error codes with `ql_strerror`/`ql_ret_from_errno` and an optional
   error callback
@@ -23,6 +26,9 @@ Cross platform: Linux / macOS / Windows, MIT license.
 | `<qlib/ql_common.h>` | version, error codes, `ql_strerror`, error handler |
 | `<qlib/ql_mem.h>` | `ql_allocator_t` and the overflow checked allocation helpers |
 | `<qlib/ql_vector.h>` | `ql_vector_t`, a growable array of fixed size elements |
+| `<qlib/ql_str.h>` | `ql_str_t`, a growable, always NUL terminated byte string |
+| `<qlib/ql_hash.h>` | `ql_hash_t`, a hash table of fixed size keys to fixed size values |
+| `<qlib/ql_list.h>` | `ql_list_t`, a doubly linked list with stable node handles |
 | `<qlib/ql_net.h>` | IPv4 address parsing and formatting (optional module) |
 | `<qlib/qlib.h>` | umbrella header pulling in all of the above |
 
@@ -36,6 +42,9 @@ The full documentation lives in [`docs/`](docs/index.md), in English with a
   [error handling](docs/user/errors.md),
   [memory](docs/user/memory.md),
   [vector](docs/user/vector.md),
+  [strings](docs/user/string.md),
+  [hash table](docs/user/hash.md),
+  [linked list](docs/user/list.md),
   [network addresses](docs/user/net.md)
 - **Technical docs** — [architecture](docs/technical/architecture.md),
   [design decisions](docs/technical/design-decisions.md),

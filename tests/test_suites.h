@@ -10,7 +10,10 @@
  */
 
 MU_DECLARE_SUITE(test_suite_common);
+MU_DECLARE_SUITE(test_suite_hash);
+MU_DECLARE_SUITE(test_suite_list);
 MU_DECLARE_SUITE(test_suite_mem);
+MU_DECLARE_SUITE(test_suite_str);
 MU_DECLARE_SUITE(test_suite_vector);
 #ifdef QLIB_HAS_NET
 MU_DECLARE_SUITE(test_suite_net);

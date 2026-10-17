@@ -1,0 +1,11 @@
+---
+# Inherits the repository-wide rules, with one exception.
+#
+# readability-function-cognitive-complexity is a metric for production logic. A
+# libFuzzer entry point is a single long function by design: it builds a case,
+# applies it, and checks a list of invariants, and splitting it into helpers
+# would only move the branches. Keeping the check on for src/ and off here is
+# the same trade-off tests/.clang-tidy makes.
+InheritParentConfig: true
+Checks: >
+  -readability-function-cognitive-complexity

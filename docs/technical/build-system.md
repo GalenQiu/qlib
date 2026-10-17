@@ -76,7 +76,7 @@ Plain (non-cache) variables set by the root file:
 | `CMAKE_C_STANDARD` / `CMAKE_C_STANDARD_REQUIRED` / `CMAKE_C_EXTENSIONS` | `11` / `ON` / `OFF` | Directory defaults for the target properties, pinning every first-party target to `-std=c11` with no extensions |
 | `QLIB_C_STANDARD` | `c_std_11` | Passed to `target_compile_features(qlib PUBLIC ...)` so consumers inherit a C11 floor |
 | `QLIB_TESTS_DEFAULT` | `ON`/`OFF` | Computed default fed to the `QLIB_BUILD_TESTS` option |
-| `QLIB_SRC` | `src/ql_common.c`, `src/ql_mem.c`, `src/ql_vector.c` | Source list for the library target |
+| `QLIB_SRC` | `src/ql_common.c`, `src/ql_mem.c`, `src/ql_str.c`, `src/ql_hash.c`, `src/ql_list.c`, `src/ql_vector.c` | Source list for the library target |
 | `DOXYGEN_HAVE_DOT` | `YES`/`NO` | Substituted into `Doxyfile.in` as `HAVE_DOT` |
 
 The C standard is pinned through both mechanisms on purpose. `target_compile_features()` alone expresses a floor: a compiler whose default dialect already satisfies `c_std_11` receives no `-std=` flag at all and builds as, say, C23. `C_STANDARD` plus `C_STANDARD_REQUIRED` and `C_EXTENSIONS OFF` is what actually emits `-std=c11`. See [portability](portability.md).

@@ -22,6 +22,14 @@ frozen.
   overflow-checked array helpers (`ql_alloc_array`, `ql_realloc_array`), the
   overflow predicates (`ql_size_mul_overflow`, `ql_size_add_overflow`), and
   `ql_aligned_alloc()` / `ql_aligned_free()`.
+- `ql_str` — a growable, always NUL terminated byte string, with an append
+  path that accepts embedded NUL bytes and supports appending a string to
+  itself.
+- `ql_hash` — a hash table of fixed size keys to fixed size values: open
+  addressing with linear probing, tombstones for deletion, and an iterator that
+  allocates nothing.
+- `ql_list` — a doubly linked list whose node handles stay valid while other
+  nodes come and go, giving constant time removal from anywhere.
 - `ql_vector` — an opaque, growable, contiguous array, with an aliasing guard
   that makes `ql_vector_push_back(v, ql_vector_at(v, 0))` defined behaviour.
 - `ql_net` *(optional)* — `ql_net_addr_t` and textual IPv4 parsing, formatting
@@ -42,9 +50,9 @@ frozen.
 
 - A minunit harness with a self-check (`tests/selftest/`) that fails when the
   harness itself stops reporting failures.
-- 60 unit tests, and 47 when the optional network module is disabled.
-- Three libFuzzer targets: `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
-- Ten micro-benchmark cases across vector, memory and address handling.
+- 106 unit tests, and 93 when the optional network module is disabled.
+- Six libFuzzer targets: `fuzz_str`, `fuzz_hash`, `fuzz_list`, `fuzz_vector`, `fuzz_mem`, `fuzz_net`.
+- Sixteen micro-benchmark cases across the containers, memory and address handling.
 - `ci/check.sh`, running the whole local matrix in eleven steps and
   distinguishing a skipped check from a passing one.
 

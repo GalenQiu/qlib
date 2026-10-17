@@ -6,95 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ---------------------------------------------------------------------------
- * A tracking allocator whose realloc ALWAYS returns a different block.
- *
- * That matters: with libc realloc a growing allocation may happen to stay put,
- * which would hide a use-after-free when the caller passes a pointer into the
- * vector's own buffer. Forcing a move makes the aliasing tests deterministic.
- * It also counts live blocks so leaks are visible.
- * ------------------------------------------------------------------------ */
-
-typedef struct
-{
-    size_t size;
-} block_header;
-
-typedef struct
-{
-    size_t live_blocks;
-    size_t total_allocs;
-    size_t total_reallocs;
-} tracking_state;
+#include "test_alloc.h"
 
 static int g_sentinel;
-
-static void* tracking_malloc(size_t size, void* userdata)
-{
-    tracking_state* state = userdata;
-    block_header* header = malloc(sizeof *header + size);
-
-    if (header == NULL)
-    {
-        return NULL;
-    }
-    header->size = size;
-    state->live_blocks++;
-    state->total_allocs++;
-    return header + 1;
-}
-
-static void* tracking_realloc(void* ptr, size_t size, void* userdata)
-{
-    tracking_state* state = userdata;
-    block_header* header;
-    void* fresh;
-    size_t copy;
-
-    if (ptr == NULL)
-    {
-        return tracking_malloc(size, userdata);
-    }
-
-    header = (block_header*)ptr - 1;
-    copy = header->size < size ? header->size : size;
-
-    /* Deliberately malloc+copy+free instead of realloc, so the block moves. */
-    fresh = tracking_malloc(size, userdata);
-    if (fresh == NULL)
-    {
-        return NULL;
-    }
-    memcpy(fresh, ptr, copy);
-
-    free(header);
-    state->live_blocks--;
-    state->total_reallocs++;
-    return fresh;
-}
-
-static void tracking_free(void* ptr, void* userdata)
-{
-    tracking_state* state = userdata;
-
-    if (ptr == NULL)
-    {
-        return;
-    }
-    free((block_header*)ptr - 1);
-    state->live_blocks--;
-}
-
-static ql_allocator_t make_tracking_allocator(tracking_state* state)
-{
-    ql_allocator_t alloc = ql_default_allocator();
-
-    alloc.malloc = tracking_malloc;
-    alloc.realloc = tracking_realloc;
-    alloc.free = tracking_free;
-    alloc.userdata = state;
-    return alloc;
-}
 
 /* ---------------------------------------------------------------------------
  * Tests
@@ -415,7 +329,9 @@ MU_TEST(test_clear_keeps_capacity)
 
 MU_TEST(test_push_back_from_own_buffer)
 {
-    tracking_state state = {0, 0, 0};
+    tracking_state state;
+
+    tracking_init(&state);
     ql_allocator_t alloc = make_tracking_allocator(&state);
     ql_vector_t* vec = NULL;
     int i;
@@ -447,7 +363,9 @@ MU_TEST(test_push_back_from_own_buffer)
 
 MU_TEST(test_insert_from_own_buffer)
 {
-    tracking_state state = {0, 0, 0};
+    tracking_state state;
+
+    tracking_init(&state);
     ql_allocator_t alloc = make_tracking_allocator(&state);
     ql_vector_t* vec = NULL;
     int i;
@@ -475,7 +393,9 @@ MU_TEST(test_insert_from_own_buffer)
 
 MU_TEST(test_insert_from_own_buffer_without_growth)
 {
-    tracking_state state = {0, 0, 0};
+    tracking_state state;
+
+    tracking_init(&state);
     ql_allocator_t alloc = make_tracking_allocator(&state);
     ql_vector_t* vec = NULL;
     int i;
@@ -504,7 +424,9 @@ MU_TEST(test_insert_from_own_buffer_without_growth)
 
 MU_TEST(test_assign_from_own_buffer)
 {
-    tracking_state state = {0, 0, 0};
+    tracking_state state;
+
+    tracking_init(&state);
     ql_allocator_t alloc = make_tracking_allocator(&state);
     ql_vector_t* vec = NULL;
     int values[3] = {10, 20, 30};
@@ -527,7 +449,9 @@ MU_TEST(test_assign_from_own_buffer)
 
 MU_TEST(test_tracking_allocator_balances_on_normal_use)
 {
-    tracking_state state = {0, 0, 0};
+    tracking_state state;
+
+    tracking_init(&state);
     ql_allocator_t alloc = make_tracking_allocator(&state);
     ql_vector_t* vec = NULL;
     int i;

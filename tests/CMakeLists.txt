@@ -11,7 +11,10 @@ set(QLIB_TEST_SRC
     minunit.c
     test_main.c
     test_common.c
+    test_hash.c
+    test_list.c
     test_mem.c
+    test_str.c
     test_vector.c
 )
 

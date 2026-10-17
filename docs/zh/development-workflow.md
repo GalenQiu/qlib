@@ -7,8 +7,8 @@
 [设计决策](technical/design-decisions.md)，构建系统的细节见
 [构建系统](technical/build-system.md)。
 
-> 这份文档只有中文版。它是给当前维护者的操作手册，等真的有英文贡献者时再补英文版
-> 不迟。`ci/check_i18n.py` 里为此保留了一个显式的例外清单，而不是让它悄悄通过检查。
+> 这份文档中英各有一份，`docs/development-workflow.md` 是英文版。两份一起维护，
+> 都不是事后补的翻译。
 
 ---
 
@@ -18,11 +18,11 @@
 |---|---|
 | 版本 | `0.1.0`（`SOVERSION 0`） |
 | 语言标准 | **恰好 C11，禁用编译器扩展**（`-std=c11`，不是 `gnu11`） |
-| 模块 | `ql_common`（错误/版本）、`ql_mem`（分配器）、`ql_vector`（动态数组）、`ql_net`（IPv4 地址，可选） |
-| 公开头文件 | `ql_common.h`、`ql_mem.h`、`ql_vector.h`、`ql_net.h`、`qlib.h`（伞形） |
-| 单元测试 | **60 个**（关闭网络模块时 47 个） |
-| 模糊测试目标 | 3 个（`fuzz_vector`、`fuzz_mem`、`fuzz_net`） |
-| 基准测试用例 | 10 个 |
+| 模块 | `ql_common`（错误/版本）、`ql_mem`（分配器）、`ql_str`（字符串）、`ql_hash`（哈希表）、`ql_list`（双向链表）、`ql_vector`（动态数组）、`ql_net`（IPv4 地址，可选） |
+| 公开头文件 | `ql_common.h`、`ql_mem.h`、`ql_str.h`、`ql_hash.h`、`ql_list.h`、`ql_vector.h`、`ql_net.h`、`qlib.h`（伞形） |
+| 单元测试 | **106 个**（关闭网络模块时 93 个） |
+| 模糊测试目标 | 6 个（`fuzz_str`、`fuzz_hash`、`fuzz_list`、`fuzz_vector`、`fuzz_mem`、`fuzz_net`） |
+| 基准测试用例 | 16 个 |
 | 本地验证 | `./ci/check.sh`，**11 个步骤** |
 | CI | GitHub Actions，**9 个 job 定义 → 一次运行 11 个 job**（`linux` 和 `windows` 是矩阵） |
 | 远端 | `origin` = Gitee（主），`github` = GitHub 镜像 |
@@ -284,8 +284,8 @@ curl -sSL "https://github.com/GalenQiu/qlib/actions/workflows/ci.yml/badge.svg?b
 - 代码块原样复制，只有块内注释翻译
 - 改了英文页要**在同一次提交**里更新中文页，否则在文档里注明译文已过期
 
-内置的例外只有两条，都写在 `ci/check_i18n.py` 里并注明了理由：
-`mainpage.md`（英文独有）和本文件（中文独有）。
+内置的例外只剩一条，写在 `ci/check_i18n.py` 里并注明了理由：
+`mainpage.md`（英文独有，因为 Doxygen 只接受一个着陆页）。
 
 ### 5.2 文档里的代码示例必须能编译
 

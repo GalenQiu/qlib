@@ -106,7 +106,7 @@ A second constraint shapes the list: **aliases are deliberately not used.** On g
 
 The C11 standard defines an optional bounds-checked library, Annex K, providing `memcpy_s`, `memset_s`, `memmove_s` and friends. This project does not use it, and the corresponding clang-tidy check is disabled in [`.clang-tidy`](../../.clang-tidy) with that justification.
 
-Annex K is optional, and glibc and macOS libc do not provide it. Adopting `memcpy_s` in `src/ql_vector.c` would break two of the three platforms CI supports, and there is no portable shim that would not just reimplement the check. The plain `memcpy`, `memmove` and `memset` calls in `ql_vector.c`, `ql_mem.c` and the minunit harness are therefore the intended tools.
+Annex K is optional, and glibc and macOS libc do not provide it. Adopting `memcpy_s` in `src/ql_vector.c` would break two of the three platforms CI supports, and there is no portable shim that would not just reimplement the check. The plain `memcpy`, `memmove` and `memset` calls in every module and in the minunit harness are therefore the intended tools.
 
 ## Aligned allocation without a platform branch
 

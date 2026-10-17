@@ -90,7 +90,7 @@ POSIX 的 `errno` 集合比 MSVC 宽得多。因此有六种情况需要加守�
 
 C11 标准定义了一个可选的带边界检查的库，即 Annex K，提供 `memcpy_s`、`memset_s`、`memmove_s` 等函数。本项目不使用它，[`.clang-tidy`](../../../.clang-tidy) 中相应的 clang-tidy 检查也因此被禁用，并注明了理由。
 
-Annex K 是可选的，glibc 和 macOS libc 都不提供它。在 `src/ql_vector.c` 中改用 `memcpy_s` 会破坏 CI 支持的三个平台中的两个，而且不存在不会重复实现该检查的可移植垫片。因此 `ql_vector.c`、`ql_mem.c` 和 minunit 测试框架中的普通 `memcpy`、`memmove`、`memset` 调用才是预期使用的工具。
+Annex K 是可选的，glibc 和 macOS libc 都不提供它。在 `src/ql_vector.c` 中改用 `memcpy_s` 会破坏 CI 支持的三个平台中的两个，而且不存在不会重复实现该检查的可移植垫片。因此各模块和 minunit 测试框架中的普通 `memcpy`、`memmove`、`memset` 调用才是预期使用的工具。
 
 ## 无平台分支的对齐分配
 

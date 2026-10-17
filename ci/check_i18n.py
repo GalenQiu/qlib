@@ -22,18 +22,16 @@ import os
 import re
 import sys
 
-# Pages that legitimately exist on one side only. Both entries are deliberate
-# and neither is a way to sneak a shared page past the check: a page that is
-# meant to exist in both trees still has to.
+# Pages that legitimately exist on one side only. This is not a way to sneak a
+# shared page past the check: a page meant to exist in both trees still has to,
+# and the list is deliberately tiny.
 #
-#   mainpage.md            Doxygen accepts a single landing page, so it stays
-#                          English.
-#   development-workflow.md  an operational manual for the current maintainer,
-#                          written in Chinese because that is who reads it. An
-#                          English version earns its place when there is an
-#                          English-speaking contributor to read it.
+#   mainpage.md   Doxygen accepts a single landing page, so it stays English.
+#
+# development-workflow.md used to be listed here too, as a Chinese-only manual
+# for the maintainer. It has an English counterpart now, so the exception went
+# with it -- which is the only way an exception should ever leave this file.
 ENGLISH_ONLY = {"mainpage.md"}
-CHINESE_ONLY = {"development-workflow.md"}
 
 IDENTIFIER_RE = re.compile(r"\b(?:ql|QLIB)_[A-Za-z0-9_]+\b")
 
@@ -70,7 +68,7 @@ def main():
     for page in sorted(english - chinese - ENGLISH_ONLY):
         print(f"MISSING TRANSLATION  docs/{page} has no docs/zh/{page}", file=sys.stderr)
         problems += 1
-    for page in sorted(chinese - english - CHINESE_ONLY):
+    for page in sorted(chinese - english):
         print(f"ORPHAN TRANSLATION   docs/zh/{page} has no docs/{page}", file=sys.stderr)
         problems += 1
 

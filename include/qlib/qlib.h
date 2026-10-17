@@ -7,7 +7,10 @@
  */
 
 #include "qlib/ql_common.h"
+#include "qlib/ql_hash.h"
+#include "qlib/ql_list.h"
 #include "qlib/ql_mem.h"
+#include "qlib/ql_str.h"
 #include "qlib/ql_vector.h"
 
 /*

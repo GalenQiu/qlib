@@ -94,8 +94,7 @@ static size_t ql_bench_scaled(size_t iterations, double scale)
 
 /** @brief Every suite, in the order they are reported. */
 static const ql_bench_suite* const g_suites[] = {
-    &ql_bench_suite_vector,
-    &ql_bench_suite_mem,
+    &ql_bench_suite_vector, &ql_bench_suite_str, &ql_bench_suite_hash, &ql_bench_suite_list, &ql_bench_suite_mem,
 #ifdef QLIB_HAS_NET
     &ql_bench_suite_net,
 #endif

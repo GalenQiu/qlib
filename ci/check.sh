@@ -143,7 +143,7 @@ step_tidy() {
     cmake -S . -B "$SCRATCH/build" -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null || return 1
     cmake --build "$SCRATCH/build" >/dev/null || return 1
-    clang-tidy src/*.c tests/*.c bench/*.c -p "$SCRATCH/build"
+    clang-tidy src/*.c tests/*.c bench/*.c fuzz/*.c -p "$SCRATCH/build"
 }
 
 step_package() {

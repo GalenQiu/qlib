@@ -33,6 +33,9 @@ python3 ci/check_links.py
 4. [Memory](user/memory.md) — the allocator abstraction and the allocation helpers
 5. [Vector](user/vector.md) — the growable array, `ql_vector_t`
 6. [Network addresses](user/net.md) — parsing and formatting IPv4 addresses
+7. [Strings](user/string.md) — the growable, always-terminated string
+8. [Hash table](user/hash.md) — fixed size keys to fixed size values
+9. [Linked list](user/list.md) — stable node handles and constant time removal
 
 ## Technical documentation
 
@@ -42,6 +45,7 @@ python3 ci/check_links.py
 4. [Portability](technical/portability.md) — supported platforms and the guards involved
 5. [Build system](technical/build-system.md) — CMake structure and how to add a module
 6. [Testing](technical/testing.md) — test, fuzz, and analysis strategy
+7. [Development workflow](development-workflow.md) — the day to day loop, the module checklist, and the mistakes this project has already made
 
 ## Building the API reference
 

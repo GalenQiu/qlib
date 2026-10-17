@@ -76,7 +76,7 @@ qlib (STATIC or SHARED)  <---- ALIAS ---->  qlib::qlib
 | `CMAKE_C_STANDARD` / `CMAKE_C_STANDARD_REQUIRED` / `CMAKE_C_EXTENSIONS` | `11` / `ON` / `OFF` | 目标属性的目录级默认值，把每个第一方目标固定为不带扩展的 `-std=c11` |
 | `QLIB_C_STANDARD` | `c_std_11` | 传给 `target_compile_features(qlib PUBLIC ...)`，让使用方继承 C11 下限 |
 | `QLIB_TESTS_DEFAULT` | `ON`/`OFF` | 计算出的默认值，供 `QLIB_BUILD_TESTS` 选项使用 |
-| `QLIB_SRC` | `src/ql_common.c`、`src/ql_mem.c`、`src/ql_vector.c` | 库目标的源文件列表 |
+| `QLIB_SRC` | `src/ql_common.c`、`src/ql_mem.c`、`src/ql_str.c`、`src/ql_hash.c`、`src/ql_list.c`、`src/ql_vector.c` | 库目标的源文件列表 |
 | `DOXYGEN_HAVE_DOT` | `YES`/`NO` | 作为 `HAVE_DOT` 替换进 `Doxyfile.in` |
 
 C 标准被刻意通过两种机制固定。仅靠 `target_compile_features()` 表达的是下限：默认方言已经满足 `c_std_11` 的编译器根本收不到 `-std=` 选项，于是按比如 C23 构建。真正发出 `-std=c11` 的是 `C_STANDARD` 加上 `C_STANDARD_REQUIRED` 和 `C_EXTENSIONS OFF`。参见[可移植性](portability.md)。

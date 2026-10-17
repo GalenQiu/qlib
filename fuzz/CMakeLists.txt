@@ -4,8 +4,11 @@
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
 
     set(QLIB_FUZZ_TARGETS
-        fuzz_vector
+        fuzz_hash
+        fuzz_list
         fuzz_mem
+        fuzz_str
+        fuzz_vector
     )
 
     # fuzz_net only exists when the optional module it exercises is built.

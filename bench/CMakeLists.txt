@@ -5,8 +5,11 @@
 
 set(QLIB_BENCH_SRC
     bench_main.c
-    bench_vector.c
+    bench_hash.c
+    bench_list.c
     bench_mem.c
+    bench_str.c
+    bench_vector.c
 )
 
 # bench_net.c only exists when the optional network module is built; the suite

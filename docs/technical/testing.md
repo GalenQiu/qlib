@@ -148,12 +148,15 @@ Inheriting rather than duplicating keeps the enabled-check list in one place. No
 
 ## Fuzzing
 
-There are three libFuzzer targets, all built only when `QLIB_BUILD_FUZZ=ON` and the compiler is Clang (`-fsanitize=fuzzer`). With any other compiler, [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) emits a `WARNING` instead of silently producing nothing.
+There are six libFuzzer targets, all built only when `QLIB_BUILD_FUZZ=ON` and the compiler is Clang (`-fsanitize=fuzzer`). With any other compiler, [`fuzz/CMakeLists.txt`](../../fuzz/CMakeLists.txt) emits a `WARNING` instead of silently producing nothing.
 
 | Target | Guards |
 |---|---|
 | [`fuzz_vector.c`](../../fuzz/fuzz_vector.c) | The container API: growth, shifting, and the element-aliasing paths |
 | [`fuzz_mem.c`](../../fuzz/fuzz_mem.c) | The arithmetic in `ql_mem`: padded sizes, alignment rounding, overflow helpers |
+| [`fuzz_str.c`](../../fuzz/fuzz_str.c) | The string length contract, the terminator, and appending a string to itself |
+| [`fuzz_hash.c`](../../fuzz/fuzz_hash.c) | Deletion and growth, checked step by step against a shadow model |
+| [`fuzz_list.c`](../../fuzz/fuzz_list.c) | Link symmetry, the size counter, and cycles |
 | [`fuzz_net.c`](../../fuzz/fuzz_net.c) | The address parser: the round-trip invariant, and clean refusal of arbitrary text |
 
 ### `fuzz_mem`

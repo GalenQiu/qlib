@@ -39,6 +39,9 @@ typedef struct
 /* Each suite translation unit provides one of these. */
 extern const ql_bench_suite ql_bench_suite_vector;
 extern const ql_bench_suite ql_bench_suite_mem;
+extern const ql_bench_suite ql_bench_suite_str;
+extern const ql_bench_suite ql_bench_suite_hash;
+extern const ql_bench_suite ql_bench_suite_list;
 
 /* Present only when the optional network module was built. */
 #ifdef QLIB_HAS_NET

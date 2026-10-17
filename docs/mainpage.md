@@ -22,6 +22,9 @@ The library is built around three ideas:
 | Common | `ql_common.h` | version macros, `ql_ret_t`, `ql_strerror()`, `ql_ret_from_errno()`, the error handler |
 | Memory | `ql_mem.h` | `ql_allocator_t`, `ql_default_allocator()`, overflow checked allocation helpers |
 | Vector | `ql_vector.h` | `ql_vector_t`, a growable contiguous array |
+| String | `ql_str.h` | `ql_str_t`, a growable, always NUL terminated byte string |
+| Hash table | `ql_hash.h` | `ql_hash_t`, fixed size keys to fixed size values |
+| Linked list | `ql_list.h` | `ql_list_t`, doubly linked with stable node handles |
 | Network | `ql_net.h` | IPv4 address parsing, formatting and comparison (optional module) |
 | Umbrella | `qlib.h` | includes all of the above |
 
@@ -34,6 +37,9 @@ User documentation:
 - [Error handling](user/errors.md)
 - [Memory](user/memory.md)
 - [Vector](user/vector.md)
+- [Strings](user/string.md)
+- [Hash table](user/hash.md)
+- [Linked list](user/list.md)
 - [Network addresses](user/net.md)
 
 Technical documentation:
