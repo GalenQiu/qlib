@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(qlib
     LANGUAGES C
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "A general purpose industrial C11 library: data structures, algorithms, network utilities and common tools."
 )
 

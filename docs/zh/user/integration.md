@@ -32,7 +32,7 @@ cmake --install build
 配置放到 `<prefix>/lib/cmake/qlib/`。使用方随后这样写：
 
 ```cmake
-find_package(qlib 0.1 REQUIRED)
+find_package(qlib 0.2 REQUIRED)
 target_link_libraries(myapp PRIVATE qlib::qlib)
 ```
 
@@ -40,7 +40,9 @@ target_link_libraries(myapp PRIVATE qlib::qlib)
 `qlib_DIR=/your/prefix/lib/cmake/qlib`。
 
 生成的 `qlibConfigVersion.cmake` 采用 `SameMajorVersion` 兼容策略，因此
-`find_package(qlib 0.1)` 会被 0.1.x 满足，而被 0.2.0 拒绝。版本信息在构建期还可
+`find_package(qlib 0.2)` 会被任何不低于该版本的已安装 `0.x` 满足——包括更晚的 `0.x`
+发行版——并被 `1.0` 拒绝。当主版本号是 `0` 时，次版本号**不是** ABI 边界：见
+[ABI 与版本](../technical/abi-and-versioning.md)。版本信息在构建期还可
 通过 `QLIB_VERSION_MAJOR`、`QLIB_VERSION_MINOR`、`QLIB_VERSION_PATCH` 和
 `QLIB_VERSION_STRING` 获得，在运行期可以通过 `ql_version()` 获得。
 

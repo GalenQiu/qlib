@@ -4,11 +4,14 @@ All notable changes to qlib are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-17
 
-Nothing is released yet. Everything below is what exists in the tree at version
-`0.1.0`, which is still marked unreleased because the public API has not been
-frozen.
+The first release. Version 0.1.0 was developed in-tree and never published, so
+everything below is what 0.2.0 contains.
+
+The major version is 0: that is a promise the major version will not change under
+you, not a promise that nothing else will. A minor bump is not yet an ABI
+boundary -- see [ABI and versioning](docs/technical/abi-and-versioning.md).
 
 ### Added
 
@@ -97,3 +100,8 @@ analysis.
 - `ql_allocator_t`'s `realloc` takes only `(ptr, size, userdata)`, so it cannot
   use the old size. Callers needing a realloc that knows the old size should
   allocate-copy-free.
+- Two things are deliberately absent rather than half-present: **non-blocking
+  sockets**, which need an event-loop abstraction the library does not have
+  (a thread per blocking socket is the supported answer), and **syslog**, which
+  would put the first `#ifdef` into `ql_log`, whose portability claim is that it
+  has none.

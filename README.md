@@ -182,7 +182,7 @@ target_link_libraries(myapp PRIVATE qlib::qlib)
 cmake --install build --prefix /your/prefix
 ```
 ```cmake
-find_package(qlib 0.1 REQUIRED)
+find_package(qlib 0.2 REQUIRED)
 target_link_libraries(myapp PRIVATE qlib::qlib)
 ```
 

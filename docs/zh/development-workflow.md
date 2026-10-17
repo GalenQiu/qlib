@@ -16,7 +16,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 版本 | `0.1.0`（`SOVERSION 0`） |
+| 版本 | `0.2.0`（`SOVERSION 0`） |
 | 语言标准 | **恰好 C11，禁用编译器扩展**（`-std=c11`，不是 `gnu11`） |
 | 模块 | `ql_common`（错误/版本）、`ql_mem`（分配器）、`ql_str`（字符串）、`ql_hash`（哈希表）、`ql_list`（双向链表）、`ql_vector`（动态数组）、`ql_thread`（线程，可选）、`ql_net`（IPv4 与 TCP，可选） |
 | 公开头文件 | `ql_common.h`、`ql_mem.h`、`ql_str.h`、`ql_hash.h`、`ql_list.h`、`ql_vector.h`、`ql_thread.h`、`ql_net.h`、`qlib.h`（伞形） |
@@ -315,7 +315,7 @@ CI 里这一步**出现任何警告即失败**（固定 Doxygen 1.18.0）。
 
 | 位置 | 作用 |
 |---|---|
-| `CMakeLists.txt` 的 `project(qlib VERSION 0.1.0)` | 决定 `SOVERSION` 与 `qlibConfigVersion.cmake` |
+| `CMakeLists.txt` 的 `project(qlib VERSION 0.2.0)` | 决定 `SOVERSION` 与 `qlibConfigVersion.cmake` |
 | `include/qlib/ql_common.h` 的 `QLIB_VERSION_*` | 编进头文件，供运行期比较 |
 
 **两处必须一起改**，否则 `ql_version()` 与头文件宏不一致，消费者做版本检查会误判。
@@ -330,8 +330,8 @@ CI 里这一步**出现任何警告即失败**（固定 Doxygen 1.18.0）。
 6. 打 tag 并推送到两个远端：
 
 ```bash
-git tag -a v0.1.0 -m "qlib 0.1.0"
-git push origin v0.1.0 && git push github v0.1.0
+git tag -a v0.2.0 -m "qlib 0.2.0"
+git push origin v0.2.0 && git push github v0.2.0
 ```
 
 ABI 承诺的完整清单见 [ABI 与版本](technical/abi-and-versioning.md)。**0.x 期间严格来说
