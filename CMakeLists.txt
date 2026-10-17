@@ -90,6 +90,13 @@ add_library(qlib_warnings INTERFACE)
 
 if(MSVC)
     target_compile_options(qlib_warnings INTERFACE /W4)
+
+    # MSVC deprecates standard C functions -- fopen, getenv -- in favour of the
+    # Annex K replacements (fopen_s, getenv_s) that glibc and macOS do not
+    # provide. Disabling the deprecation keeps the source portable instead of
+    # forking every call behind an #ifdef for one compiler. It is on the
+    # warnings target, which is internal, so it does not leak to consumers.
+    target_compile_definitions(qlib_warnings INTERFACE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(qlib_warnings INTERFACE
         -Wall

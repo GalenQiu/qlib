@@ -208,4 +208,6 @@ An expired condition-variable wait is `QL_ERR_TIMEOUT` on both platforms, but th
 
 **Consequences.** `src/ql_log.c` contains **no `#ifdef` at all** — everything it needs is C11. That is not an accident either: colour is explicit rather than sniffing for a terminal (which needs `isatty`, a POSIX call), and the timestamp uses `localtime()`/`gmtime()` under the logger's own mutex rather than the POSIX reentrant variants. A module with no platform code cannot fail on a platform it was never compiled for, which is worth more than automatic colour.
 
+That portability has one price, paid in the build system rather than in the source: MSVC deprecates `fopen` and `getenv` in favour of Annex K replacements that glibc and macOS do not provide. `_CRT_SECURE_NO_WARNINGS` is therefore set on the internal warnings target, so one compiler's policy is answered once instead of forking every call.
+
 The cost is a second link dependency chain (`ql_log` → `ql_thread` → `Threads::Threads`), and a log format that is now a compatibility surface: `PLAIN` lines and `JSON` keys are what log shippers will parse, so changing them is a breaking change from here on. Both are recorded rather than discovered later.
