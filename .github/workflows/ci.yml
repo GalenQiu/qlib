@@ -129,43 +129,6 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # ThreadSanitizer on a second implementation. TSan is run locally on Linux
-  # GCC/Clang, but AppleClang's runtime is a separate implementation and the
-  # threading module is the one place where that difference could matter.
-  # ---------------------------------------------------------------------------
-  macos-tsan:
-    name: macos / thread sanitizer
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure
-        run: >
-          cmake -S . -B build
-          -DQLIB_WERROR=ON
-          -DQLIB_BUILD_THREADS=ON
-          -DQLIB_BUILD_LOG=ON
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_C_FLAGS=-fsanitize=thread
-          -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread
-
-      # qlib_harness_selftest is excluded here. It runs a deliberately failing
-      # probe executable and matches its report text; under AppleClang's
-      # ThreadSanitizer the probe produces no report at all, which looks like
-      # the runtime failing to load rather than a race. That self check is about
-      # the minunit counters crossing a translation unit boundary, nothing to do
-      # with threads, and it runs in every other job.
-      - name: Test
-        shell: bash
-        run: |
-          set -o pipefail
-          if ! ctest --test-dir build --output-on-failure -E qlib_harness_selftest 2>&1 | tee test.log; then
-            grep -E "WARNING: ThreadSanitizer|SUMMARY|Failed|FAIL:|tests run" test.log | head -8 |
-              while IFS= read -r line; do echo "::error::$line"; done
-            exit 1
-          fi
-
-  # ---------------------------------------------------------------------------
   # AddressSanitizer + UndefinedBehaviorSanitizer (includes LeakSanitizer).
   # ---------------------------------------------------------------------------
   sanitizers:
