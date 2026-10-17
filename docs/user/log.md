@@ -124,6 +124,11 @@ ql_log_set_rotation(4 * 1024 * 1024, 3);        /* 4 MiB, keep three backups */
 When the file would exceed the limit it becomes `app.log.1`, earlier backups
 shift down, and `app.log.<backups>` is deleted.
 
+Files are opened in binary mode, so a record is written as bytes and the line
+endings are `\n` on every platform. JSON lines in particular are parsed by
+machines, and being identical everywhere is worth more than the local
+convention.
+
 `ql_log_flush()` writes file output out immediately. Ordinary records are
 buffered, so a crash may lose the last few lines; `QL_LOG_FATAL` flushes on its
 own, since it is the record you most want to survive.

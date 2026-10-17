@@ -437,7 +437,7 @@ static void ql_log_rotate(void)
     (void)snprintf(to, sizeof to, "%s.1", g_log.path);
     (void)rename(g_log.path, to);
 
-    g_log.file = fopen(g_log.path, "a");
+    g_log.file = fopen(g_log.path, "ab");
     g_log.written = 0;
 }
 
@@ -462,7 +462,11 @@ ql_ret_t ql_log_set_file(const char* path)
         }
         memcpy(copy, path, length + 1);
 
-        file = fopen(path, "a");
+        /* Binary mode: a record is written as bytes, so the file does not
+         * grow \r\n line endings on Windows. JSON lines in particular are
+         * parsed by machine, and being identical on every platform is worth
+         * more than the platform's convention. */
+        file = fopen(path, "ab");
         if (file == NULL)
         {
             ql_dealloc(&g_log.alloc, copy);
