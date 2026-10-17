@@ -68,7 +68,7 @@ cmake --build build --target docs
 cd docs
 sed -e 's|@PROJECT_SOURCE_DIR@|..|g' \
     -e 's|@PROJECT_BINARY_DIR@|..|g' \
-    -e 's|@PROJECT_VERSION@|0.2.0|g' \
+    -e 's|@PROJECT_VERSION@|0.3.0|g' \
     -e 's|@PROJECT_NAME@|qlib|g' \
     Doxyfile.in > Doxyfile
 doxygen Doxyfile

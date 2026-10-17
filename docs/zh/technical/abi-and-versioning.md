@@ -87,14 +87,14 @@ endif()
 
 | 机制 | 来源 | 它回答的问题 |
 |---|---|---|
-| `VERSION 0.2.0` / `SOVERSION 0` | [CMakeLists.txt](../../../CMakeLists.txt) 中的 `project(qlib VERSION 0.2.0 ...)` | 加载器会选择哪个二进制？ |
+| `VERSION 0.3.0` / `SOVERSION 0` | [CMakeLists.txt](../../../CMakeLists.txt) 中的 `project(qlib VERSION 0.3.0 ...)` | 加载器会选择哪个二进制？ |
 | `QLIB_VERSION_MAJOR/MINOR/PATCH/STRING` | [`ql_common.h`](../../../include/qlib/ql_common.h) | 这个翻译单元是针对哪组头文件编译的？ |
 | `ql_version()` | `src/ql_common.c`，返回 `QLIB_VERSION_STRING` | 运行时实际加载的是哪个库？ |
 
 `VERSION` 与 `SOVERSION` 会成为共享对象的 ELF 版本信息。在本检出上，一次共享构建产生：
 
 ```text
-libqlib.so -> libqlib.so.0 -> libqlib.so.0.2.0
+libqlib.so -> libqlib.so.0 -> libqlib.so.0.3.0
 SONAME: libqlib.so.0
 ```
 
@@ -126,7 +126,7 @@ write_basic_package_version_file(
 )
 ```
 
-`SameMajorVersion` 意味着使用方的 `find_package(qlib 0.1 REQUIRED)` 接受任何已安装的 `0.x.y`，并拒绝 `1.x`。已验证的行为：安装 `0.2.0` 后，`find_package(qlib 0.1 REQUIRED)` 成功；请求 `9.9` 会失败并报 *"Could not find a configuration file for package "qlib" that is compatible with requested version "9.9""*。解析器报告的已安装版本是 `0.2.0`。
+`SameMajorVersion` 意味着使用方的 `find_package(qlib 0.1 REQUIRED)` 接受任何已安装的 `0.x.y`，并拒绝 `1.x`。已验证的行为：安装 `0.3.0` 后，`find_package(qlib 0.1 REQUIRED)` 成功；请求 `9.9` 会失败并报 *"Could not find a configuration file for package "qlib" that is compatible with requested version "9.9""*。解析器报告的已安装版本是 `0.3.0`。
 
 只有在每次不兼容变更都会提升主版本号的前提下，`SameMajorVersion` 才是这里正确的策略。鉴于版本仍是 `0.x`，更严格的解读是：`1.0.0` 之前的**任何**一次发布都可能破坏兼容性，而包版本检查不会发现这一点，因为所有 `0.x` 版本互相都可接受。
 

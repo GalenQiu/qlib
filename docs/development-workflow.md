@@ -18,7 +18,7 @@ of the build system see [Build system](technical/build-system.md).
 
 | Item | Current value |
 |---|---|
-| Version | `0.2.0` (`SOVERSION 0`) |
+| Version | `0.3.0` (`SOVERSION 0`) |
 | Language standard | **Exactly C11, compiler extensions disabled** (`-std=c11`, not `gnu11`) |
 | Modules | `ql_common` (errors/version), `ql_mem` (allocator), `ql_str` (string), `ql_hash` (hash table), `ql_list` (linked list), `ql_vector` (dynamic array), `ql_thread` (threads, optional), `ql_net` (IPv4 and TCP, optional) |
 | Public headers | `ql_common.h`, `ql_mem.h`, `ql_str.h`, `ql_hash.h`, `ql_list.h`, `ql_vector.h`, `ql_thread.h`, `ql_net.h`, `qlib.h` (umbrella) |
@@ -349,7 +349,7 @@ The version number lives in two places:
 
 | Location | Effect |
 |---|---|
-| `project(qlib VERSION 0.2.0)` in `CMakeLists.txt` | Determines `SOVERSION` and `qlibConfigVersion.cmake` |
+| `project(qlib VERSION 0.3.0)` in `CMakeLists.txt` | Determines `SOVERSION` and `qlibConfigVersion.cmake` |
 | `QLIB_VERSION_*` in `include/qlib/ql_common.h` | Compiled into the headers for run-time comparison |
 
 **Both must be changed together**, otherwise `ql_version()` and the header macros
@@ -366,8 +366,8 @@ Release checklist:
 6. Tag and push to both remotes:
 
 ```bash
-git tag -a v0.2.0 -m "qlib 0.2.0"
-git push origin v0.2.0 && git push github v0.2.0
+git tag -a v0.3.0 -m "qlib 0.3.0"
+git push origin v0.3.0 && git push github v0.3.0
 ```
 
 For the complete list of ABI promises see

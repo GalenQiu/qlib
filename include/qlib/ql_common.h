@@ -25,14 +25,14 @@ extern "C"
 /** @brief Major component of the version of these headers. */
 #define QLIB_VERSION_MAJOR 0
 /** @brief Minor component of the version of these headers. */
-#define QLIB_VERSION_MINOR 2
+#define QLIB_VERSION_MINOR 3
 /** @brief Patch component of the version of these headers. */
 #define QLIB_VERSION_PATCH 0
-/** @brief Version string of these headers, e.g. "0.2.0". Compare with ql_version(). */
-#define QLIB_VERSION_STRING "0.2.0"
+/** @brief Version string of these headers, e.g. "0.3.0". Compare with ql_version(). */
+#define QLIB_VERSION_STRING "0.3.0"
 
 /**
- * @brief Version of the library actually linked in, e.g. "0.2.0".
+ * @brief Version of the library actually linked in, e.g. "0.3.0".
  *
  * Compare it against QLIB_VERSION_STRING to detect a header/library mismatch.
  * @return A static string; never NULL.

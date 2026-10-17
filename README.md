@@ -66,6 +66,19 @@ cmake -S . -B build -DQLIB_BUILD_DOCS=ON
 cmake --build build --target docs      # writes docs/html/index.html
 ```
 
+## A worked example
+
+[`examples/workbench.c`](examples/workbench.c) is a terminal dashboard built on
+the whole library at once — threads, a hash table, a list, a vector, strings, the
+logger and the network address code:
+
+```bash
+cmake -S . -B build -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON -DQLIB_BUILD_EXAMPLES=ON
+cmake --build build
+./build/bin/qlib_workbench            # Ctrl-C to stop
+./build/bin/qlib_workbench --frames 3 --log run.log
+```
+
 Release history, and what is still missing, is in [`CHANGELOG.md`](CHANGELOG.md).
 Contributors should read [`CONTRIBUTING.md`](CONTRIBUTING.md) and, if they read
 Chinese, [the development workflow guide](docs/zh/development-workflow.md).
@@ -182,7 +195,7 @@ target_link_libraries(myapp PRIVATE qlib::qlib)
 cmake --install build --prefix /your/prefix
 ```
 ```cmake
-find_package(qlib 0.2 REQUIRED)
+find_package(qlib 0.3 REQUIRED)
 target_link_libraries(myapp PRIVATE qlib::qlib)
 ```
 

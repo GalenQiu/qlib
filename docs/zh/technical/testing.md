@@ -310,7 +310,7 @@ cmake --build build
 | `windows` | `windows-latest`，矩阵 `shared` 取 `OFF`/`ON` | `-DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_SHARED=...` | MSVC 构建；只有 `ON` 这一变体才真正走通 `QLIB_EXPORT`、`__declspec(dllexport)` 和 `QLIB_STATIC_DEFINE`，并且 `QLIB_BUILD_BENCH` 是唯一会编译 `QueryPerformanceCounter` 计时路径的配置 |
 | `sanitizers` | `ubuntu-24.04`，clang | `-DQLIB_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug` | 单元测试套件中没有内存错误或未定义行为 |
 | `fuzz` | `ubuntu-24.04`，clang | `-DQLIB_BUILD_FUZZ=ON`，随后 `-max_total_time=120 -max_len=256` | 任意操作序列下的内存安全与不变量；失败时把 `crash-*` 作为 `fuzz-crash` 工件上传 |
-| `package` | `ubuntu-24.04` | 安装到某个前缀，然后构建两个使用方 | `find_package(qlib 0.2 REQUIRED)` 和 `pkg-config` 都能解析并链接 |
+| `package` | `ubuntu-24.04` | 安装到某个前缀，然后构建两个使用方 | `find_package(qlib 0.3 REQUIRED)` 和 `pkg-config` 都能解析并链接 |
 | `docs` | `ubuntu-24.04` | 来自上游发布 tarball 的 Doxygen 1.18.0；`python3 ci/check_links.py`，随后 `-DQLIB_BUILD_DOCS=ON` 和 `--target docs` | Markdown 中的每个相对链接都能解析；参考文档能构建且 `docs/html/index.html` 存在；**并且 Doxygen 完全不产生警告**。参考文档作为 `api-reference` 工件上传 |
 | `format` | `ubuntu-24.04` | `pip install clang-format==23.1.1` | 对 `git ls-files '*.c' '*.h'` 得到的每个文件做格式检查，版本被固定，因为不同发行版输出不同 |
 | `tidy` | `ubuntu-24.04` | 来自 LLVM apt 仓库的 clang-tidy 23 | 通过 `-p build` 对 `src/*.c` 和 `tests/*.c` 做静态分析；`WarningsAsErrors: '*'` 使任何发现都是致命的 |

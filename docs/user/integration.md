@@ -37,7 +37,7 @@ The install puts the headers in `<prefix>/include/qlib/`, the library in
 `<prefix>/lib/cmake/qlib/`. Consumers then write:
 
 ```cmake
-find_package(qlib 0.2 REQUIRED)
+find_package(qlib 0.3 REQUIRED)
 target_link_libraries(myapp PRIVATE qlib::qlib)
 ```
 
@@ -45,7 +45,7 @@ Point CMake at the prefix with `-DCMAKE_PREFIX_PATH=/your/prefix`, or by setting
 `qlib_DIR=/your/prefix/lib/cmake/qlib` directly.
 
 The generated `qlibConfigVersion.cmake` uses `SameMajorVersion` compatibility,
-so `find_package(qlib 0.2)` is satisfied by any installed `0.x` at least that
+so `find_package(qlib 0.3)` is satisfied by any installed `0.x` at least that
 version — including later `0.x` releases — and rejected by `1.0`. While the major
 version is `0`, the minor version is **not** an ABI boundary: see
 [ABI and versioning](../technical/abi-and-versioning.md). The

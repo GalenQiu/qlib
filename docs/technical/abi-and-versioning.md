@@ -87,14 +87,14 @@ Two independent version mechanisms exist, and they answer different questions.
 
 | Mechanism | Source | Question it answers |
 |---|---|---|
-| `VERSION 0.2.0` / `SOVERSION 0` | `project(qlib VERSION 0.2.0 ...)` in [CMakeLists.txt](../../CMakeLists.txt) | Which binary does the loader pick? |
+| `VERSION 0.3.0` / `SOVERSION 0` | `project(qlib VERSION 0.3.0 ...)` in [CMakeLists.txt](../../CMakeLists.txt) | Which binary does the loader pick? |
 | `QLIB_VERSION_MAJOR/MINOR/PATCH/STRING` | [`ql_common.h`](../../include/qlib/ql_common.h) | Which headers was this translation unit compiled against? |
 | `ql_version()` | `src/ql_common.c`, returns `QLIB_VERSION_STRING` | Which library is actually loaded at runtime? |
 
 `VERSION` and `SOVERSION` become the ELF versioning of the shared object. On this checkout a shared build produces:
 
 ```text
-libqlib.so -> libqlib.so.0 -> libqlib.so.0.2.0
+libqlib.so -> libqlib.so.0 -> libqlib.so.0.3.0
 SONAME: libqlib.so.0
 ```
 
@@ -126,7 +126,7 @@ write_basic_package_version_file(
 )
 ```
 
-`SameMajorVersion` means a consumer's `find_package(qlib 0.1 REQUIRED)` accepts any installed `0.x.y`, and rejects `1.x`. Verified behaviour: with `0.2.0` installed, `find_package(qlib 0.1 REQUIRED)` succeeds; requesting `9.9` fails with *"Could not find a configuration file for package "qlib" that is compatible with requested version "9.9""*. The resolver reports the installed version as `0.2.0`.
+`SameMajorVersion` means a consumer's `find_package(qlib 0.1 REQUIRED)` accepts any installed `0.x.y`, and rejects `1.x`. Verified behaviour: with `0.3.0` installed, `find_package(qlib 0.1 REQUIRED)` succeeds; requesting `9.9` fails with *"Could not find a configuration file for package "qlib" that is compatible with requested version "9.9""*. The resolver reports the installed version as `0.3.0`.
 
 `SameMajorVersion` is the right policy here only while the major version is bumped for every incompatible change. Given the version is still `0.x`, the stricter reading is that **any** release before `1.0.0` may break compatibility, and the package version check will not catch it, because all `0.x` versions are mutually acceptable.
 

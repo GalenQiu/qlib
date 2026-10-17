@@ -163,7 +163,7 @@ step_threads() {
 
     # shellcheck disable=SC2086
     cmake -S . -B "$SCRATCH/threads" -DQLIB_WERROR=ON -DQLIB_BUILD_THREADS=ON \
-        -DQLIB_BUILD_LOG=ON -DCMAKE_BUILD_TYPE=Debug $flags >/dev/null || return 1
+        -DQLIB_BUILD_LOG=ON -DQLIB_BUILD_EXAMPLES=ON -DCMAKE_BUILD_TYPE=Debug $flags >/dev/null || return 1
     cmake --build "$SCRATCH/threads" >/dev/null || return 1
     ctest --test-dir "$SCRATCH/threads" --output-on-failure
 }

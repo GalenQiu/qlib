@@ -4,12 +4,23 @@ All notable changes to qlib are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-17
 
 ### Added
 
-- `ql_net` parses and formats IPv6 addresses (see the 0.2.0 entry below). This
-  landed after the tag, so it is not part of 0.2.0.
+- `ql_net` parses and formats **IPv6** addresses: the eight-group form, `::`
+  compression, an embedded dotted quad such as `::ffff:192.0.2.1`, and RFC 5952
+  formatting (lowercase, no leading zeros, longest zero run compressed with the
+  leftmost winning a tie, IPv4-mapped addresses in mixed notation). No struct
+  change and no new error code, which is what ADR-14 predicted. Sockets remain
+  IPv4 only and report `QL_ERR_NOT_SUPPORTED` for an IPv6 address.
+- `examples/workbench.c`, a terminal dashboard built on the whole library:
+  worker threads, a hash table of per-worker counters, a bounded record queue,
+  a rolling throughput sparkline, strings assembled per line, the logger writing
+  the same stream to a file asynchronously, and an address parsed and formatted
+  in the network panel. Built with `-DQLIB_BUILD_EXAMPLES=ON` and run as
+  `bin/qlib_workbench`; `--frames N` makes it non-interactive, which is how CI
+  smoke-tests it.
 
 ## [0.2.0] - 2026-10-17
 

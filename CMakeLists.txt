@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(qlib
     LANGUAGES C
-    VERSION 0.2.0
+    VERSION 0.3.0
     DESCRIPTION "A general purpose industrial C11 library: data structures, algorithms, network utilities and common tools."
 )
 
@@ -36,6 +36,11 @@ option(QLIB_BUILD_THREADS "Build the qlib threading module" OFF)
 
 # The logger serialises writes with a mutex, so it needs the threading module.
 option(QLIB_BUILD_LOG     "Build the qlib logging module (needs QLIB_BUILD_THREADS)" OFF)
+
+# A comprehensive terminal demo. It needs the threading and logging modules, so
+# it is not a "hello world" -- it is what exercising the whole library looks
+# like, and it is built only when asked for.
+option(QLIB_BUILD_EXAMPLES "Build the example programs" OFF)
 
 if(QLIB_BUILD_LOG AND NOT QLIB_BUILD_THREADS)
     message(FATAL_ERROR
@@ -245,6 +250,19 @@ set_target_properties(qlib PROPERTIES
 if(QLIB_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# ---------------------------------------------------------------------------
+# Examples
+# ---------------------------------------------------------------------------
+if(QLIB_BUILD_EXAMPLES)
+    if(NOT QLIB_BUILD_THREADS OR NOT QLIB_BUILD_LOG)
+        message(FATAL_ERROR
+            "QLIB_BUILD_EXAMPLES requires QLIB_BUILD_THREADS=ON and QLIB_BUILD_LOG=ON: "
+            "the workbench demonstrates modules working together, and two of them "
+            "are the ones it needs.")
+    endif()
+    add_subdirectory(examples)
 endif()
 
 # Fuzz targets (libFuzzer needs Clang; fuzz/CMakeLists.txt reports otherwise)

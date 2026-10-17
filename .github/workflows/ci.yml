@@ -40,7 +40,7 @@ jobs:
       - name: Configure
         env:
           CC: ${{ matrix.compiler }}
-        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON
+        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON -DQLIB_BUILD_EXAMPLES=ON
 
       - name: Build
         run: cmake --build build --parallel
@@ -87,7 +87,7 @@ jobs:
       # QLIB_BUILD_BENCH is the only thing that compiles the
       # QueryPerformanceCounter timer path.
       - name: Configure
-        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON -DQLIB_SHARED=${{ matrix.shared }}
+        run: cmake -S . -B build -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON -DQLIB_BUILD_EXAMPLES=ON -DQLIB_SHARED=${{ matrix.shared }}
 
       # Split from the full build so a failure says which half broke. MSVC
       # cannot be run locally, so the only signal available is which step went
