@@ -138,7 +138,9 @@
 
 **背景。** `QLIB_BUILD_NET` 曾经是一个什么都不构建的选项。网络模块是一项庞大的工程，而那些棘手的部分会立刻出现：socket 在 Windows 上需要按进程初始化（`WSAStartup` 是全局的，必须先于其他每一个 socket 调用，而在库内部没有自然的位置来调用它），socket 库在 Windows 上必须链接而在 POSIX 上不需要，而且几乎每个操作在各个平台上的写法都不同。因此，第一块切片必须按"它*不需要*什么"来挑选，否则它根本落不了地。
 
-**决策。** 该模块从文本形式的 IPv4 地址处理开始：`ql_net_addr_parse()`、`ql_net_addr_format()` 和 `ql_net_addr_equal()`。没有 socket，没有平台初始化，没有需要链接的外部库，任何地方都没有 `#if defined(_WIN32)`。IPv6 文本会被识别出来并报告为 `QL_ERR_NOT_SUPPORTED`，而不是被误解析成 IPv4；`ql_net_addr_t` 存储十六个字节，因此加入 IPv6 不是 ABI 变更。地址族枚举使用 qlib 自己的取值，而不是平台的 `AF_INET`，后者在 Windows 与 POSIX 上并不相同。
+**决策。** 该模块从文本形式的 IPv4 地址处理开始：`ql_net_addr_parse()`、`ql_net_addr_format()` 和 `ql_net_addr_equal()`。没有 socket，没有平台初始化，没有需要链接的外部库，任何地方都没有 `#if defined(_WIN32)`。IPv6 文本会被识别出来并报告为 `QL_ERR_NOT_SUPPORTED`，而不是被误解析成 IPv4；`ql_net_addr_t` 存储十六个字节，因此加入 IPv6 不是 ABI 变更。
+
+那个预测成立了：后来加入的 IPv6 解析与 RFC 5952 格式化没有改动结构体、没有新增错误码，对任何只使用 IPv4 的调用方也没有影响。socket 仍然只支持 IPv4——地址处理是字符串问题，而 IPv6 socket 是另一项独立的平台工作——地址函数通过报告 `QL_ERR_NOT_SUPPORTED` 而不是假称支持来表达这一点。地址族枚举使用 qlib 自己的取值，而不是平台的 `AF_INET`，后者在 Windows 与 POSIX 上并不相同。
 
 **影响。** 每一条代码路径都是对字符串的纯计算，因此无需网络、对端、特权端口或超时即可测试，也不会在 CI 中变得不稳定。没有链接依赖，因此 `QLIB_BUILD_NET` 仍然只是一个源码层面的开关，该模块在三个受支持平台上行为一致。解析本身也证明值得做模糊测试：它是 qlib 中唯一把不受信任的文本转换成值的地方，`fuzz/fuzz_net.c` 检查往返不变量。代价是出现了一个名叫"网络"、目前却不打开任何 socket 的模块，这一点必须在文档中直说，而不能含糊带过。当 socket 真正到来时，它们会带来 `WSAStartup` 及其进程级生命期、一个条件化的链接依赖，以及该模块第一段真正与平台相关的代码——这是这块切片刻意留待解决的问题。
 

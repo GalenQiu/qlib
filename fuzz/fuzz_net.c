@@ -43,9 +43,9 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
         return 0;
     }
 
-    if (addr.family != QL_NET_AF_INET)
+    if (addr.family != QL_NET_AF_INET && addr.family != QL_NET_AF_INET6)
     {
-        abort(); /* a successful parse is always IPv4 */
+        abort(); /* a successful parse is IPv4 or IPv6 */
     }
 
     if (ql_net_addr_format(&addr, out, sizeof out) != QL_OK)
@@ -54,9 +54,9 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     }
 
     length = strlen(out);
-    if (length > 15U)
+    if (length >= QL_NET_ADDR_STR_MAX)
     {
-        abort(); /* "255.255.255.255" is the longest IPv4 text */
+        abort(); /* the longest IPv6 text is 45 bytes */
     }
 
     /* The formatted text must parse back to the same address. */
@@ -87,21 +87,26 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     }
 
     /*
-     * The documented minimum is 16 bytes for IPv4 whatever the address needs,
-     * not `strlen + 1`. Asserting the tighter rule here was a bug in this
-     * harness: the library is entitled to reject a short buffer, and does.
+     * The documented minimum is 16 bytes for IPv4 and QL_NET_ADDR_STR_MAX for
+     * IPv6, whatever the address happens to need -- not `strlen + 1`. Asserting
+     * the tighter rule here was a bug in this harness: the library is entitled
+     * to reject a short buffer, and does.
      */
-    if (ql_net_addr_format(&addr, again_text, 16) != QL_OK)
     {
-        abort();
-    }
-    if (strcmp(out, again_text) != 0)
-    {
-        abort();
-    }
-    if (ql_net_addr_format(&addr, again_text, 15) != QL_ERR_OUT_OF_RANGE)
-    {
-        abort();
+        size_t minimum = addr.family == QL_NET_AF_INET ? 16U : QL_NET_ADDR_STR_MAX;
+
+        if (ql_net_addr_format(&addr, again_text, minimum) != QL_OK)
+        {
+            abort();
+        }
+        if (strcmp(out, again_text) != 0)
+        {
+            abort();
+        }
+        if (ql_net_addr_format(&addr, again_text, minimum - 1U) != QL_ERR_OUT_OF_RANGE)
+        {
+            abort();
+        }
     }
 
     return 0;

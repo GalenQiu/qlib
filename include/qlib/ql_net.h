@@ -18,9 +18,11 @@
  * has to be linked -- so they sit behind QLIB_BUILD_NET and the address half
  * keeps working without them.
  *
- * Only IPv4 is implemented. IPv6 is reported as QL_ERR_NOT_SUPPORTED rather
- * than as a syntax error, and ql_net_addr_t already stores enough bytes for it,
- * so adding it later is not an ABI change.
+ * Address handling covers both families. Sockets do not: they are IPv4 only,
+ * and passing an IPv6 address to one reports QL_ERR_NOT_SUPPORTED rather than
+ * silently doing something else. The split is deliberate -- IPv6 sockets are a
+ * separate piece of platform work -- and the address half keeps working
+ * regardless.
  *
  * Sockets here are blocking, and there is no DNS: build a ql_net_addr_t with
  * ql_net_addr_parse() and connect to it. See
@@ -49,7 +51,7 @@ typedef enum
 {
     QL_NET_AF_UNSPEC = 0, /**< No address; the zero value. */
     QL_NET_AF_INET,       /**< IPv4. */
-    QL_NET_AF_INET6,      /**< IPv6. Reserved: not parsed or formatted yet. */
+    QL_NET_AF_INET6,      /**< IPv6. Parsed and formatted; not connectable. */
 } ql_net_family_t;
 
 /**
@@ -96,9 +98,12 @@ typedef struct
  * @param text NUL terminated text, for example @c "192.168.1.1".
  * @param out  Receives the parsed address. Zeroed before parsing, so on success
  *             it is fully deterministic including @c reserved.
+ * IPv6 is recognised by the presence of a colon. The accepted forms are the
+ * eight-group form, `::` compression (at most once), and a trailing dotted quad
+ * such as `::ffff:192.0.2.1`. Zone identifiers (`%eth0`) are rejected.
+ *
  * @return QL_OK; QL_ERR_INVALID_ARG for a NULL argument or malformed text;
- *         QL_ERR_OUT_OF_RANGE if an octet is above 255;
- *         QL_ERR_NOT_SUPPORTED if @p text looks like IPv6.
+ *         QL_ERR_OUT_OF_RANGE if an IPv4 octet is above 255.
  */
 QLIB_EXPORT ql_ret_t ql_net_addr_parse(const char* text, ql_net_addr_t* out);
 
@@ -110,9 +115,13 @@ QLIB_EXPORT ql_ret_t ql_net_addr_parse(const char* text, ql_net_addr_t* out);
  *             cannot mistake a partial write for a result.
  * @param size Size of @p buf in bytes. Needs at least 16 for IPv4, and
  *             QL_NET_ADDR_STR_MAX covers every family.
+ * IPv6 is rendered the way RFC 5952 asks: lowercase, no leading zeros, the
+ * longest run of two or more zero groups compressed with `::` (leftmost on a
+ * tie), and an IPv4-mapped address in the mixed notation (`::ffff:192.0.2.1`).
+ *
  * @return QL_OK; QL_ERR_INVALID_ARG for a NULL argument or an address of
- *         family QL_NET_AF_UNSPEC; QL_ERR_OUT_OF_RANGE if @p size is too small;
- *         QL_ERR_NOT_SUPPORTED for IPv6.
+ *         family QL_NET_AF_UNSPEC; QL_ERR_OUT_OF_RANGE if @p size is too small
+ *         (16 bytes for IPv4, QL_NET_ADDR_STR_MAX for IPv6).
  */
 QLIB_EXPORT ql_ret_t ql_net_addr_format(const ql_net_addr_t* addr, char* buf, size_t size);
 
@@ -175,6 +184,8 @@ QLIB_EXPORT void ql_net_shutdown(void);
  *                then read it back with ql_net_local_port().
  * @param backlog Pending connection queue length. Values below 1 become 1.
  * @param out     Receives the listening socket. Set to NULL before any failure.
+ * Sockets are IPv4 only: an IPv6 address is QL_ERR_NOT_SUPPORTED.
+ *
  * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_NOT_SUPPORTED for
  *         IPv6, or QL_ERR_IO / QL_ERR_SYS from the platform.
  *
@@ -190,9 +201,11 @@ QLIB_EXPORT ql_ret_t ql_net_tcp_listen(const ql_allocator_t* alloc, const ql_net
  * Blocking: returns once the connection is established or failed. There is no
  * DNS, so @p addr must already be an address.
  *
- * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_NOT_SUPPORTED for
- *         IPv6, QL_ERR_IO when the peer refused or is unreachable, or
- *         QL_ERR_SYS for anything unmapped.
+ * Sockets are IPv4 only: an IPv6 address is QL_ERR_NOT_SUPPORTED.
+ *
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_SYS when the platform
+ *         refused to start or the address family is unsupported, or QL_ERR_IO
+ *         when the peer refused or is unreachable.
  */
 QLIB_EXPORT ql_ret_t ql_net_tcp_connect(const ql_allocator_t* alloc, const ql_net_addr_t* addr, uint16_t port,
                                         ql_net_socket_t** out);

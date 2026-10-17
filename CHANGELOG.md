@@ -45,8 +45,9 @@ boundary -- see [ABI and versioning](docs/technical/abi-and-versioning.md).
 - `ql_thread` *(optional)* — `ql_thread_t`, `ql_mutex_t` and `ql_cond_t` over
   `pthread` and the Win32 equivalents. The first part of the library that is not
   plain C11, and the second link dependency (`Threads::Threads`).
-- `ql_net` *(optional)* — `ql_net_addr_t` and textual IPv4 parsing, formatting
-  and comparison; name resolution via `getaddrinfo`; plus `ql_net_socket_t` and
+- `ql_net` *(optional)* — `ql_net_addr_t` with textual IPv4 **and IPv6**
+  parsing, formatting (RFC 5952, IPv4-mapped addresses in mixed notation) and
+  comparison; name resolution via `getaddrinfo`; plus `ql_net_socket_t` and
   blocking IPv4 TCP sockets (`listen`, `connect`, `accept`, `send`, `recv`,
   timeouts). No non-blocking I/O and no IPv6 sockets. The only link dependency in the library:
   `ws2_32` on Windows, and only when the module is built.
@@ -90,8 +91,8 @@ analysis.
 
 ### Known limitations
 
-- `ql_net` handles IPv4 only. IPv6 text is reported as `QL_ERR_NOT_SUPPORTED`
-  rather than mis-parsed, and `ql_net_addr_t` already has room for it.
+- `ql_net` parses and formats IPv6 but cannot connect over it: sockets are IPv4
+  only, and an IPv6 address given to one is `QL_ERR_NOT_SUPPORTED`.
 - Concurrency is opt-in (`QLIB_BUILD_THREADS`) and minimal: threads, a mutex and
   a condition variable. No thread pool, no read-write lock, no atomics. Sockets
   are still blocking. The logger does have an asynchronous mode, which is what

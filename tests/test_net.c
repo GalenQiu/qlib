@@ -186,11 +186,15 @@ MU_TEST(test_parse_rejects_out_of_range_octets)
 
 MU_TEST(test_parse_reports_ipv6_as_unsupported)
 {
-    expect_parse("::1", QL_ERR_NOT_SUPPORTED);
-    expect_parse("::", QL_ERR_NOT_SUPPORTED);
-    expect_parse("2001:db8::1", QL_ERR_NOT_SUPPORTED);
-    expect_parse("fe80::1%eth0", QL_ERR_NOT_SUPPORTED);
-    expect_parse(":", QL_ERR_NOT_SUPPORTED);
+    /* IPv6 is parsed now; these are the forms that must still be rejected. */
+    expect_parse(":", QL_ERR_INVALID_ARG);
+    expect_parse(":::1", QL_ERR_INVALID_ARG);
+    expect_parse("1:2:3:4:5:6:7:8:9", QL_ERR_INVALID_ARG);
+    expect_parse("1::2::3", QL_ERR_INVALID_ARG);
+    expect_parse("12345::1", QL_ERR_INVALID_ARG);
+    expect_parse("1:2:3:4:5:6:7:", QL_ERR_INVALID_ARG);
+    expect_parse("gggg::1", QL_ERR_INVALID_ARG);
+    expect_parse("fe80::1%eth0", QL_ERR_INVALID_ARG);
 }
 
 MU_TEST(test_parse_rejects_null_arguments)
@@ -200,6 +204,68 @@ MU_TEST(test_parse_rejects_null_arguments)
     MU_CHECK(ql_net_addr_parse(NULL, &addr) == QL_ERR_INVALID_ARG);
     MU_CHECK(ql_net_addr_parse("1.2.3.4", NULL) == QL_ERR_INVALID_ARG);
     MU_CHECK(ql_net_addr_parse(NULL, NULL) == QL_ERR_INVALID_ARG);
+}
+
+MU_TEST(test_parse_and_format_ipv6)
+{
+    static const char* const canonical[] = {
+        "::", "::1", "1::", "2001:db8::1", "fe80::1", "2001:db8::1:0:0:1", "::ffff:192.0.2.1", "1:2:3:4:5:6:7:8",
+    };
+    ql_net_addr_t addr;
+    char buf[QL_NET_ADDR_STR_MAX];
+    size_t i;
+
+    for (i = 0; i < sizeof canonical / sizeof canonical[0]; i++)
+    {
+        MU_ASSERT(ql_net_addr_parse(canonical[i], &addr) == QL_OK);
+        MU_CHECK(addr.family == QL_NET_AF_INET6);
+
+        memset(buf, 0, sizeof buf);
+        MU_ASSERT(ql_net_addr_format(&addr, buf, sizeof buf) == QL_OK);
+        if (strcmp(buf, canonical[i]) != 0)
+        {
+            fprintf(stderr, "  %s formatted as %s\n", canonical[i], buf);
+        }
+        MU_CHECK(strcmp(buf, canonical[i]) == 0);
+    }
+}
+
+MU_TEST(test_ipv6_forms_that_mean_the_same_address)
+{
+    ql_net_addr_t a;
+    ql_net_addr_t b;
+
+    /* Full form and compressed form of the same address. */
+    MU_ASSERT(ql_net_addr_parse("2001:0db8:0000:0000:0000:0000:0000:0001", &a) == QL_OK);
+    MU_ASSERT(ql_net_addr_parse("2001:db8::1", &b) == QL_OK);
+    MU_CHECK(ql_net_addr_equal(&a, &b));
+
+    /* Leading zeros in a group are legal, they just do not survive formatting. */
+    MU_ASSERT(ql_net_addr_parse("2001:0DB8::0001", &a) == QL_OK);
+    MU_CHECK(ql_net_addr_equal(&a, &b));
+
+    /* The leftmost of two equal zero runs is the one that gets compressed. */
+    MU_ASSERT(ql_net_addr_parse("2001:db8::1:0:0:1", &a) == QL_OK);
+    {
+        char buf[QL_NET_ADDR_STR_MAX];
+
+        MU_ASSERT(ql_net_addr_format(&a, buf, sizeof buf) == QL_OK);
+        MU_CHECK(strcmp(buf, "2001:db8::1:0:0:1") == 0);
+    }
+
+    /* A single zero group is not compressed. */
+    MU_ASSERT(ql_net_addr_parse("2001:db8:0:1:1:1:1:1", &a) == QL_OK);
+    {
+        char buf[QL_NET_ADDR_STR_MAX];
+
+        MU_ASSERT(ql_net_addr_format(&a, buf, sizeof buf) == QL_OK);
+        MU_CHECK(strcmp(buf, "2001:db8:0:1:1:1:1:1") == 0);
+    }
+
+    /* IPv4 and IPv6 addresses of different families are never equal. */
+    MU_ASSERT(ql_net_addr_parse("1.2.3.4", &a) == QL_OK);
+    MU_ASSERT(ql_net_addr_parse("::1", &b) == QL_OK);
+    MU_CHECK(!ql_net_addr_equal(&a, &b));
 }
 
 MU_TEST(test_format_writes_the_address)
@@ -255,8 +321,17 @@ MU_TEST(test_format_rejects_bad_arguments_and_families)
     MU_CHECK(ql_net_addr_format(&unspec, buf, sizeof buf) == QL_ERR_INVALID_ARG);
 
     MU_ASSERT(ql_net_addr_parse("1.2.3.4", &addr) == QL_OK);
-    addr.family = QL_NET_AF_INET6;
-    MU_CHECK(ql_net_addr_format(&addr, buf, sizeof buf) == QL_ERR_NOT_SUPPORTED);
+    /* IPv6 formats now, but only into a buffer sized for it. */
+    {
+        ql_net_addr_t v6;
+        char small[16];
+
+        memset(&v6, 0, sizeof v6);
+        v6.family = QL_NET_AF_INET6;
+        MU_CHECK(ql_net_addr_format(&v6, small, sizeof small) == QL_ERR_OUT_OF_RANGE);
+        MU_CHECK(ql_net_addr_format(&v6, buf, sizeof buf) == QL_OK);
+        MU_CHECK(strcmp(buf, "::") == 0);
+    }
 
     /*
      * A family outside the enum is not an address either. Casting out of range
@@ -310,12 +385,12 @@ MU_TEST(test_failures_are_raised_not_just_returned)
     MU_CHECK(ql_net_addr_parse("1.2.3", &addr) == QL_ERR_INVALID_ARG);
     probe_expect(2, QL_ERR_INVALID_ARG);
 
-    MU_CHECK(ql_net_addr_parse("::1", &addr) == QL_ERR_NOT_SUPPORTED);
-    probe_expect(3, QL_ERR_NOT_SUPPORTED);
+    MU_CHECK(ql_net_addr_parse("gggg::1", &addr) == QL_ERR_INVALID_ARG);
+    probe_expect(3, QL_ERR_INVALID_ARG);
 
     /* A successful call must stay silent. */
     MU_ASSERT(ql_net_addr_parse("1.2.3.4", &addr) == QL_OK);
-    probe_expect(3, QL_ERR_NOT_SUPPORTED);
+    probe_expect(3, QL_ERR_INVALID_ARG);
 
     MU_CHECK(ql_net_addr_format(&addr, buf, 4) == QL_ERR_OUT_OF_RANGE);
     probe_expect(4, QL_ERR_OUT_OF_RANGE);
@@ -626,6 +701,8 @@ MU_TEST_SUITE(test_suite_net)
     MU_RUN_TEST(test_parse_rejects_out_of_range_octets);
     MU_RUN_TEST(test_parse_reports_ipv6_as_unsupported);
     MU_RUN_TEST(test_parse_rejects_null_arguments);
+    MU_RUN_TEST(test_parse_and_format_ipv6);
+    MU_RUN_TEST(test_ipv6_forms_that_mean_the_same_address);
     MU_RUN_TEST(test_format_writes_the_address);
     MU_RUN_TEST(test_format_rejects_short_buffers_without_writing);
     MU_RUN_TEST(test_format_rejects_bad_arguments_and_families);

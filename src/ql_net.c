@@ -80,39 +80,44 @@ static bool g_net_started = false;
 /* "255.255.255.255" plus the terminator. */
 #define QL_NET_IPV4_STR_SIZE 16
 
-static bool ql_net_is_digit(char c)
+/** @brief Value of a hexadecimal digit, or -1. */
+static int ql_net_hex_value(char c)
 {
-    return c >= '0' && c <= '9';
+    if (c >= '0' && c <= '9')
+    {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f')
+    {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F')
+    {
+        return c - 'A' + 10;
+    }
+    return -1;
 }
 
-ql_ret_t ql_net_addr_parse(const char* text, ql_net_addr_t* out)
+/**
+ * @brief Parse a dotted quad at @p p.
+ *
+ * Leading zeros are rejected rather than guessed at, for the reason recorded in
+ * ADR-14: "010" is ten in decimal and eight in octal, and every real-world bug
+ * of that shape comes from a parser picking one.
+ *
+ * @param p    Start of the text.
+ * @param out  Receives the four octets.
+ * @param end  Receives the position just past the quad.
+ * @return QL_OK, QL_ERR_INVALID_ARG for malformed text, or
+ *         QL_ERR_OUT_OF_RANGE for an octet above 255.
+ */
+static ql_ret_t ql_net_parse_octets(const char* p, unsigned char out[4], const char** end)
 {
-    ql_net_addr_t addr;
-    const char* p;
     size_t index;
-
-    if (text == NULL || out == NULL)
-    {
-        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: text or out is NULL");
-        return QL_ERR_INVALID_ARG;
-    }
-
-    /*
-     * A colon means the caller wrote IPv6. Saying "not supported" is more
-     * useful than the syntax error the octet parser would otherwise report.
-     */
-    if (strchr(text, ':') != NULL)
-    {
-        ql_err_raise(QL_ERR_NOT_SUPPORTED, "ql_net_addr_parse: IPv6 is not supported yet");
-        return QL_ERR_NOT_SUPPORTED;
-    }
-
-    memset(&addr, 0, sizeof addr);
-    p = text;
 
     for (index = 0; index < 4; index++)
     {
-        unsigned value = 0;
+        unsigned int value = 0;
         int digits = 0;
 
         if (index > 0)
@@ -125,26 +130,19 @@ ql_ret_t ql_net_addr_parse(const char* text, ql_net_addr_t* out)
             p++;
         }
 
-        while (ql_net_is_digit(*p))
+        while (*p >= '0' && *p <= '9')
         {
-            /*
-             * Reject "010" rather than pick a base for it. inet_pton() on glibc
-             * also rejects it, and silently choosing octal here would be the
-             * kind of surprise that turns into a security bug elsewhere.
-             */
-            if (digits == 0 && *p == '0' && ql_net_is_digit(p[1]))
+            if (digits == 0 && *p == '0' && p[1] >= '0' && p[1] <= '9')
             {
                 ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: octet has a leading zero");
                 return QL_ERR_INVALID_ARG;
             }
-
-            value = (value * 10U) + (unsigned)(*p - '0');
+            value = (value * 10U) + (unsigned int)(*p - '0');
             if (value > 255U)
             {
                 ql_err_raise(QL_ERR_OUT_OF_RANGE, "ql_net_addr_parse: octet is above 255");
                 return QL_ERR_OUT_OF_RANGE;
             }
-
             digits++;
             p++;
         }
@@ -154,20 +152,343 @@ ql_ret_t ql_net_addr_parse(const char* text, ql_net_addr_t* out)
             ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: octet is empty");
             return QL_ERR_INVALID_ARG;
         }
-
-        addr.bytes[index] = (unsigned char)value;
+        out[index] = (unsigned char)value;
     }
 
-    /* Exactly four octets, and nothing left over. */
-    if (*p != '\0')
+    *end = p;
+    return QL_OK;
+}
+
+/** @brief Parse one hexadecimal group, advancing @p p past it. */
+static ql_ret_t ql_net_parse_hex_group(const char** p, unsigned int* out)
+{
+    unsigned int value = 0;
+    int digits = 0;
+
+    while (**p != '\0' && **p != ':')
     {
-        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: trailing characters after the address");
+        int nibble = ql_net_hex_value(**p);
+
+        if (nibble < 0 || ++digits > 4)
+        {
+            ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: bad hexadecimal group");
+            return QL_ERR_INVALID_ARG;
+        }
+        value = (value << 4U) | (unsigned int)nibble;
+        (*p)++;
+    }
+
+    if (digits == 0)
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: empty group");
         return QL_ERR_INVALID_ARG;
+    }
+
+    *out = value;
+    return QL_OK;
+}
+
+/** @brief Parse an embedded dotted quad, which stands for two groups. */
+static ql_ret_t ql_net_parse_embedded_v4(const char* p, unsigned int groups[8], int* count)
+{
+    unsigned char octets[4];
+    const char* end = p;
+    ql_ret_t rc = ql_net_parse_octets(p, octets, &end);
+
+    if (rc != QL_OK)
+    {
+        return rc;
+    }
+    if (*end != '\0' || *count > 6)
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: bad embedded IPv4 address");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    groups[(*count)++] = ((unsigned int)octets[0] << 8U) | (unsigned int)octets[1];
+    groups[(*count)++] = ((unsigned int)octets[2] << 8U) | (unsigned int)octets[3];
+    return QL_OK;
+}
+
+/**
+ * @brief Expand a `::` into zero groups.
+ *
+ * Moves the parsed tail to the end, leaves zeros in the gap, and returns the
+ * number of groups, which is eight on success.
+ */
+static ql_ret_t ql_net_expand_gap(unsigned int groups[8], int count, int gap)
+{
+    int tail = count - gap;
+    int i;
+
+    /* The compressed run must stand for at least one group. */
+    if (tail > 8 - gap)
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: '::' compresses nothing");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    for (i = 0; i < tail; i++)
+    {
+        groups[7 - i] = groups[count - 1 - i];
+    }
+    for (i = gap; i < 8 - tail; i++)
+    {
+        groups[i] = 0;
+    }
+    return QL_OK;
+}
+
+/** @brief Write the eight groups into the address bytes. */
+static void ql_net_store_ipv6(unsigned char out[16], const unsigned int groups[8])
+{
+    int i;
+
+    for (i = 0; i < 8; i++)
+    {
+        out[(size_t)i * 2] = (unsigned char)(groups[i] >> 8U);
+        out[((size_t)i * 2) + 1] = (unsigned char)(groups[i] & 0xFFU);
+    }
+}
+
+/**
+ * @brief Parse an IPv6 address.
+ *
+ * Accepts the eight-group form, `::` compression (at most once), and a trailing
+ * dotted quad such as `::ffff:192.0.2.1`, which contributes the last two
+ * groups.
+ */
+/* The branches here are the IPv6 grammar: eight groups, one optional `::`, and
+ * an optional embedded dotted quad. Splitting it further would move the grammar
+ * into a helper's parameter list rather than remove it. */
+// NOLINTNEXTLINE(readability-function-cognitive-complexity) -- the branches are the grammar
+static ql_ret_t ql_net_parse_ipv6(const char* text, unsigned char out[16])
+{
+    unsigned int groups[8];
+    int count = 0;
+    int gap = -1;
+    const char* p = text;
+
+    memset(groups, 0, sizeof groups);
+
+    if (text[0] == ':')
+    {
+        if (text[1] != ':')
+        {
+            ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: address starts with a single ':'");
+            return QL_ERR_INVALID_ARG;
+        }
+        gap = 0;
+        p = text + 2;
+    }
+
+    while (*p != '\0')
+    {
+        /* A dotted quad may end the address, standing in for two groups. */
+        if (strchr(p, '.') != NULL && strchr(p, ':') == NULL)
+        {
+            ql_ret_t rc = ql_net_parse_embedded_v4(p, groups, &count);
+
+            if (rc != QL_OK)
+            {
+                return rc;
+            }
+            break;
+        }
+
+        if (count >= 8)
+        {
+            ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: too many groups");
+            return QL_ERR_INVALID_ARG;
+        }
+        {
+            ql_ret_t rc = ql_net_parse_hex_group(&p, &groups[count]);
+
+            if (rc != QL_OK)
+            {
+                return rc;
+            }
+            count++;
+        }
+
+        if (*p != ':')
+        {
+            if (*p != '\0')
+            {
+                ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: unexpected character");
+                return QL_ERR_INVALID_ARG;
+            }
+            break;
+        }
+
+        p++;
+        if (*p == ':')
+        {
+            if (gap >= 0)
+            {
+                ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: '::' appears twice");
+                return QL_ERR_INVALID_ARG;
+            }
+            gap = count;
+            p++;
+        }
+        else if (*p == '\0')
+        {
+            ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: address ends with ':'");
+            return QL_ERR_INVALID_ARG;
+        }
+    }
+
+    if (gap >= 0)
+    {
+        ql_ret_t rc = ql_net_expand_gap(groups, count, gap);
+
+        if (rc != QL_OK)
+        {
+            return rc;
+        }
+        count = 8;
+    }
+
+    if (count != 8)
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: IPv6 address needs eight groups");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    memset(out, 0, 16);
+    ql_net_store_ipv6(out, groups);
+    return QL_OK;
+}
+
+ql_ret_t ql_net_addr_parse(const char* text, ql_net_addr_t* out)
+{
+    ql_net_addr_t addr;
+    ql_ret_t rc;
+
+    if (text == NULL || out == NULL)
+    {
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: text or out is NULL");
+        return QL_ERR_INVALID_ARG;
+    }
+
+    memset(&addr, 0, sizeof addr);
+
+    if (strchr(text, ':') != NULL)
+    {
+        rc = ql_net_parse_ipv6(text, addr.bytes);
+        if (rc != QL_OK)
+        {
+            return rc;
+        }
+        addr.family = QL_NET_AF_INET6;
+        *out = addr;
+        return QL_OK;
+    }
+
+    {
+        const char* end = text;
+
+        rc = ql_net_parse_octets(text, addr.bytes, &end);
+        if (rc != QL_OK)
+        {
+            return rc;
+        }
+        if (*end != '\0')
+        {
+            ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_parse: trailing characters after the address");
+            return QL_ERR_INVALID_ARG;
+        }
     }
 
     addr.family = QL_NET_AF_INET;
     *out = addr;
     return QL_OK;
+}
+
+/**
+ * @brief Render an IPv6 address the way RFC 5952 asks: lowercase, no leading
+ *        zeros, and the longest run of two or more zero groups compressed with
+ *        `::` (the leftmost run on a tie).
+ */
+static void ql_net_format_ipv6(const unsigned char bytes[16], char* buf, size_t size)
+{
+    /* RFC 5952 section 5: an IPv4-mapped address is written in the mixed
+     * notation, so ::ffff:192.0.2.1 keeps the dotted quad a human can read
+     * instead of becoming ::ffff:c000:201. */
+    static const unsigned char mapped_prefix[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF};
+
+    if (memcmp(bytes, mapped_prefix, sizeof mapped_prefix) == 0)
+    {
+        (void)snprintf(buf, size, "::ffff:%u.%u.%u.%u", (unsigned)bytes[12], (unsigned)bytes[13], (unsigned)bytes[14],
+                       (unsigned)bytes[15]);
+        return;
+    }
+
+    {
+        unsigned int groups[8];
+        int best_start = -1;
+        int best_length = 0;
+        size_t used = 0;
+        int i;
+
+        for (i = 0; i < 8; i++)
+        {
+            groups[i] = ((unsigned int)bytes[(size_t)i * 2] << 8U) | (unsigned int)bytes[((size_t)i * 2) + 1];
+        }
+
+        for (i = 0; i < 8;)
+        {
+            if (groups[i] != 0)
+            {
+                i++;
+                continue;
+            }
+            {
+                int start = i;
+
+                while (i < 8 && groups[i] == 0)
+                {
+                    i++;
+                }
+                /* Two or more: a single zero group is never compressed. */
+                if (i - start >= 2 && i - start > best_length)
+                {
+                    best_start = start;
+                    best_length = i - start;
+                }
+            }
+        }
+
+        for (i = 0; i < 8; i++)
+        {
+            if (best_start >= 0 && i >= best_start && i < best_start + best_length)
+            {
+                if (i == best_start && used + 2 < size)
+                {
+                    buf[used++] = ':';
+                    buf[used++] = ':';
+                }
+                continue;
+            }
+
+            /* A separator, unless this is the first thing or a colon precedes it. */
+            if (used > 0 && buf[used - 1] != ':' && used + 1 < size)
+            {
+                buf[used++] = ':';
+            }
+            if (used + 5 < size)
+            {
+                used += (size_t)snprintf(buf + used, size - used, "%x", groups[i]);
+            }
+        }
+
+        /* An all-zero address compresses to "::", which the loop already emitted. */
+        if (used < size)
+        {
+            buf[used] = '\0';
+        }
+    }
 }
 
 ql_ret_t ql_net_addr_format(const ql_net_addr_t* addr, char* buf, size_t size)
@@ -182,12 +503,18 @@ ql_ret_t ql_net_addr_format(const ql_net_addr_t* addr, char* buf, size_t size)
 
     if (addr->family == QL_NET_AF_INET6)
     {
-        ql_err_raise(QL_ERR_NOT_SUPPORTED, "ql_net_addr_format: IPv6 is not supported yet");
-        return QL_ERR_NOT_SUPPORTED;
+        if (size < QL_NET_ADDR_STR_MAX)
+        {
+            ql_err_raise(QL_ERR_OUT_OF_RANGE, "ql_net_addr_format: buffer is too small for IPv6");
+            return QL_ERR_OUT_OF_RANGE;
+        }
+        ql_net_format_ipv6(addr->bytes, buf, size);
+        return QL_OK;
     }
+
     if (addr->family != QL_NET_AF_INET)
     {
-        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_format: not an IPv4 address");
+        ql_err_raise(QL_ERR_INVALID_ARG, "ql_net_addr_format: not an address");
         return QL_ERR_INVALID_ARG;
     }
 

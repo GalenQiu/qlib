@@ -1,6 +1,6 @@
 # Network addresses
 
-`<qlib/ql_net.h>` turns textual IPv4 addresses into values and back. It is the
+`<qlib/ql_net.h>` turns textual IPv4 and IPv6 addresses into values and back. It is the
 first slice of the network module, and deliberately the slice that needs no
 sockets, no platform initialisation and no external library: it is pure
 computation over a string, so it works the same on every platform qlib supports
@@ -10,7 +10,7 @@ Address handling needs no network, no platform initialisation and no external
 library. TCP sockets need all three, so they are a second, self-contained
 section further down, and the address half keeps working without them.
 
-DNS and IPv6 sockets are still absent, deliberately; the **TCP sockets** section below says why.
+DNS is available; IPv6 *sockets* are not, deliberately — the **TCP sockets** section below says why.
 
 > The module is optional. A build configured with `QLIB_BUILD_NET=OFF` omits it
 > entirely, and then `<qlib/ql_net.h>` is not installed either. Including
@@ -23,7 +23,7 @@ DNS and IPv6 sockets are still absent, deliberately; the **TCP sockets** section
 typedef enum {
     QL_NET_AF_UNSPEC = 0,   /* no address; the zero value */
     QL_NET_AF_INET,         /* IPv4 */
-    QL_NET_AF_INET6         /* IPv6: reserved, not implemented yet */
+    QL_NET_AF_INET6         /* IPv6: parsed and formatted, not connectable */
 } ql_net_family_t;
 
 typedef struct {
@@ -39,8 +39,8 @@ difference into every caller.
 
 The type is small, has no invariants beyond the family tag, and callers need to
 build one on the stack, so it is one of the exposed value types the project
-allows. It stores sixteen bytes even though IPv4 needs four, which is what makes
-adding IPv6 later a non-breaking change.
+allows. It stores sixteen bytes even though IPv4 needs four, which is what made
+adding IPv6 a non-breaking change.
 
 A zeroed `ql_net_addr_t` is a valid value: family `QL_NET_AF_UNSPEC`, meaning
 "no address".
@@ -79,9 +79,7 @@ and eight in octal, and every real-world security bug of that shape comes from a
 parser picking the wrong one. Write `10.0.0.1`. A lone `0` is unambiguous and
 stays legal.
 
-**IPv6 is `QL_ERR_NOT_SUPPORTED`.** The text is recognised as IPv6 rather than
-reported as a malformed IPv4 address, so a caller can tell "not yet" from
-"wrong".
+**A colon means IPv6**, and IPv6 is parsed. See the next section.
 
 On success the whole destination is written, including the unused bytes and
 `reserved`, so the result is deterministic whatever the caller's variable held
@@ -92,13 +90,14 @@ before.
 ```c
 char buf[QL_NET_ADDR_STR_MAX];
 if (ql_net_addr_format(&addr, buf, sizeof buf) != QL_OK) {
-    /* buffer too small, or not an IPv4 address */
+    /* buffer too small, or no address */
 }
 puts(buf);   /* "192.168.1.1" */
 ```
 
-`QL_NET_ADDR_STR_MAX` is 46, sized for IPv6 as well, so a buffer that size never
-needs revisiting. IPv4 needs only 16.
+`QL_NET_ADDR_STR_MAX` is 46, which is what IPv6 needs, so a buffer that size
+covers both families. IPv4 alone needs 16, and a shorter buffer is accepted for
+an IPv4 address.
 
 Use a caller-supplied buffer rather than a returned static: it keeps the
 function thread-safe and makes the lifetime obvious.
@@ -108,6 +107,40 @@ partial write for a result. A buffer smaller than the address needs is
 `QL_ERR_OUT_OF_RANGE`; formatting `QL_NET_AF_UNSPEC` is `QL_ERR_INVALID_ARG`
 because "no address" has no text; formatting `QL_NET_AF_INET6` is
 `QL_ERR_NOT_SUPPORTED`.
+
+## IPv6 addresses
+
+The accepted forms are the eight-group form, `::` compression (at most once), and
+a trailing dotted quad such as `::ffff:192.0.2.1`. Zone identifiers (`%eth0`) are
+rejected: this module has no interface index to carry them in.
+
+```c
+ql_net_addr_t addr;
+char text[QL_NET_ADDR_STR_MAX];
+
+ql_net_addr_parse("2001:0db8:0000:0000:0000:0000:0000:0001", &addr);
+ql_net_addr_format(&addr, text, sizeof text);
+puts(text);   /* 2001:db8::1 */
+```
+
+Formatting follows RFC 5952, which is the form other tools will produce and
+expect:
+
+| Rule | Example |
+|---|---|
+| Lowercase, no leading zeros | `2001:0DB8::0001` formats as `2001:db8::1` |
+| The longest run of **two or more** zero groups is compressed | `2001:db8::1` |
+| A single zero group is never compressed | `2001:db8:0:1:1:1:1:1` |
+| The **leftmost** run wins a tie | `2001:db8::1:0:0:1` |
+| An IPv4-mapped address uses the mixed notation | `::ffff:192.0.2.1` |
+
+That last rule is RFC 5952 §5: `::ffff:c000:201` is the same address, but the
+dotted quad is the form a human can read.
+
+**Sockets do not accept IPv6.** `ql_net_tcp_connect()` and `ql_net_tcp_listen()`
+report `QL_ERR_NOT_SUPPORTED` for an IPv6 address rather than silently doing
+something else. Addressing is a string problem; an IPv6 socket is a separate
+piece of platform work.
 
 ## Comparing
 
