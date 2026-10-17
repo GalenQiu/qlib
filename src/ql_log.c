@@ -598,9 +598,6 @@ static void ql_log_writer_thread(void* arg)
 
     for (;;)
     {
-        ql_log_record record;
-        bool have = false;
-
         ql_mutex_lock(g_log.queue_mutex);
         while (g_log.queue_count == 0 && g_log.queue_running)
         {
@@ -609,32 +606,33 @@ static void ql_log_writer_thread(void* arg)
 
         if (g_log.queue_count > 0)
         {
-            record = g_log.queue[g_log.queue_head];
+            /* Copy-initialised, so there is no window in which the record
+             * exists but holds nothing -- which is also the shape MSVC wants
+             * (C4701 is not a false positive about style, it is a real
+             * question about which writes reach the read). */
+            ql_log_record record = g_log.queue[g_log.queue_head];
+
             g_log.queue_head = (g_log.queue_head + 1) % g_log.queue_capacity;
             g_log.queue_count--;
             g_log.writer_busy = true;
-            have = true;
-        }
-        ql_mutex_unlock(g_log.queue_mutex);
+            ql_mutex_unlock(g_log.queue_mutex);
 
-        if (!have)
-        {
-            /* Stopping and nothing left: say so and leave. */
+            ql_mutex_lock(g_log.mutex);
+            ql_log_emit(record.text, record.length);
+            ql_mutex_unlock(g_log.mutex);
+
             ql_mutex_lock(g_log.queue_mutex);
             g_log.writer_busy = false;
             ql_cond_broadcast(g_log.queue_cond);
             ql_mutex_unlock(g_log.queue_mutex);
-            return;
+            continue;
         }
 
-        ql_mutex_lock(g_log.mutex);
-        ql_log_emit(record.text, record.length);
-        ql_mutex_unlock(g_log.mutex);
-
-        ql_mutex_lock(g_log.queue_mutex);
+        /* Stopping with nothing queued: say so and leave. */
         g_log.writer_busy = false;
         ql_cond_broadcast(g_log.queue_cond);
         ql_mutex_unlock(g_log.queue_mutex);
+        return;
     }
 }
 
