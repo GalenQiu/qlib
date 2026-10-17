@@ -479,8 +479,16 @@ MU_TEST(test_accept_times_out_instead_of_blocking)
     MU_ASSERT(listener != NULL);
     MU_ASSERT(ql_net_set_timeout(listener, 100) == QL_OK);
 
-    /* Nothing is pending, so the wait expires and reports itself. */
-    MU_CHECK(ql_net_accept(listener, &server) == QL_ERR_AGAIN);
+    /*
+     * Nothing is pending, so the wait expires. POSIX reports that as EAGAIN and
+     * Windows as WSAETIMEDOUT, so both answers are correct here; what matters
+     * is that it returned at all rather than blocking forever.
+     */
+    {
+        ql_ret_t rc = ql_net_accept(listener, &server);
+
+        MU_CHECK(rc == QL_ERR_AGAIN || rc == QL_ERR_TIMEOUT);
+    }
     MU_CHECK(server == NULL);
 
     ql_net_socket_close(listener);

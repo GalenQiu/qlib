@@ -184,8 +184,8 @@ QLIB_EXPORT ql_ret_t ql_net_tcp_connect(const ql_allocator_t* alloc, const ql_ne
  * listener to bound the wait.
  *
  * The accepted socket inherits the listener's allocator. @return QL_OK,
- * QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_AGAIN if nothing arrived in time, or
- * QL_ERR_IO / QL_ERR_SYS from the platform.
+ * QL_ERR_INVALID_ARG, QL_ERR_NOMEM, QL_ERR_AGAIN or QL_ERR_TIMEOUT if nothing
+ * arrived in time, or QL_ERR_IO / QL_ERR_SYS from the platform.
  */
 QLIB_EXPORT ql_ret_t ql_net_accept(const ql_net_socket_t* listener, ql_net_socket_t** out);
 
@@ -214,8 +214,8 @@ QLIB_EXPORT ql_ret_t ql_net_send(ql_net_socket_t* sock, const void* data, size_t
  * @param out_received Receives the byte count. **Zero means the peer closed the
  *                     connection cleanly** -- that is the POSIX convention and
  *                     it is not an error.
- * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_AGAIN if nothing arrived within the
- *         timeout (or the socket is non-blocking), or QL_ERR_IO / QL_ERR_SYS.
+ * @return QL_OK, QL_ERR_INVALID_ARG, QL_ERR_AGAIN or QL_ERR_TIMEOUT if nothing
+ *         arrived within the timeout, or QL_ERR_IO / QL_ERR_SYS.
  */
 QLIB_EXPORT ql_ret_t ql_net_recv(ql_net_socket_t* sock, void* buf, size_t cap, size_t* out_received);
 
@@ -224,9 +224,11 @@ QLIB_EXPORT ql_ret_t ql_net_recv(ql_net_socket_t* sock, void* buf, size_t cap, s
  *
  * Applies to receive and send. 0 means "wait forever", which is the default.
  *
- * A timeout that expires is reported as QL_ERR_AGAIN rather than
- * QL_ERR_TIMEOUT, because that is what Linux and macOS actually return for an
- * expired `SO_RCVTIMEO` and it cannot be told apart from a full buffer.
+ * An expired timeout is reported as QL_ERR_AGAIN on Linux and macOS, because
+ * that is what an expired `SO_RCVTIMEO` returns there and it cannot be told
+ * apart from a full buffer without a `poll()` layer. Windows reports
+ * WSAETIMEDOUT, which maps to QL_ERR_TIMEOUT. Treat both as "nothing arrived in
+ * time".
  *
  * @return QL_OK, QL_ERR_INVALID_ARG, or QL_ERR_SYS if the platform rejected it.
  */

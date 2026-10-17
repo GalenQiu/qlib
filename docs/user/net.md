@@ -227,10 +227,11 @@ offered; `out_sent` says how many. Call again with the rest. Treating
 with `*out_received == 0` at end of stream. That is the POSIX convention and it
 is not a failure; a socket loop terminates on it.
 
-**A timeout surfaces as `QL_ERR_AGAIN`, not `QL_ERR_TIMEOUT`.** Linux and macOS
-return `EAGAIN` for an expired `SO_RCVTIMEO`, and it cannot be told apart from a
-full buffer without a `poll()` layer. Treat `QL_ERR_AGAIN` as "nothing arrived
-in time". Windows does report `WSAETIMEDOUT`, which maps to `QL_ERR_TIMEOUT`.
+**An expired timeout is `QL_ERR_AGAIN` on Linux and macOS, `QL_ERR_TIMEOUT` on
+Windows.** POSIX returns `EAGAIN` for an expired `SO_RCVTIMEO` and it cannot be
+told apart from a full buffer without a `poll()` layer; Windows returns
+`WSAETIMEDOUT`. Treat both codes as "nothing arrived in time" rather than
+testing for one.
 
 `ql_net_tcp_listen` sets `SO_REUSEADDR`, so restarting a server does not trip
 over the `TIME_WAIT` of its previous connections.

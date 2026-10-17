@@ -214,10 +214,10 @@ server read 4 bytes
 且 `*out_received == 0`。这是 POSIX 的约定，不是失败；socket 循环正是以此作为终止
 条件。
 
-**超时表现为 `QL_ERR_AGAIN`，而不是 `QL_ERR_TIMEOUT`。** Linux 与 macOS 对到期的
-`SO_RCVTIMEO` 返回 `EAGAIN`，而没有 `poll()` 这一层，就无法把它与"缓冲区已满"区分
-开。请把 `QL_ERR_AGAIN` 当作"这段时间里没有东西到达"。Windows 确实会报告
-`WSAETIMEDOUT`，它映射为 `QL_ERR_TIMEOUT`。
+**超时在 Linux 与 macOS 上是 `QL_ERR_AGAIN`，在 Windows 上是 `QL_ERR_TIMEOUT`。**
+POSIX 对过期的 `SO_RCVTIMEO` 返回 `EAGAIN`，在没有 `poll()` 层的情况下无法与发送
+缓冲区已满区分；Windows 返回 `WSAETIMEDOUT`。请把两个码都当作"超时内没有数据到达"，
+而不是只判断其中一个。
 
 `ql_net_tcp_listen` 会设置 `SO_REUSEADDR`，因此重启服务器时不会撞上它先前那些连接
 遗留的 `TIME_WAIT`。

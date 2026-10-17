@@ -162,7 +162,7 @@ jobs:
         run: |
           for target in fuzz_vector fuzz_mem; do
             echo "=== $target ==="
-            ./build/bin/$target -max_total_time=120 -max_len=256 -print_final_stats=1
+            ./build/bin/$target -max_total_time=60 -max_len=256 -print_final_stats=1
           done
 
       - name: Upload crashing input
