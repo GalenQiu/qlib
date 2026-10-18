@@ -29,7 +29,10 @@
 
 #include <qlib/qlib.h>
 
+#include <errno.h>
+#include <limits.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,6 +63,14 @@ typedef struct
     workbench* wb;
     int id;
 } worker_arg;
+
+typedef struct
+{
+    int workers;
+    int frames;
+    int fps;
+    const char* log_path;
+} workbench_options;
 
 static volatile sig_atomic_t g_stop = 0;
 
@@ -119,7 +130,7 @@ static void worker(void* arg)
         for (i = 0; i < 20000; i++)
         {
             local = (local * 1103515245ULL) + 12345ULL;
-            local ^= local >> 17;
+            local ^= local >> 17U;
         }
 
         /* Build the message first: it touches only this thread's state. */
@@ -174,32 +185,64 @@ static void worker(void* arg)
     }
 }
 
+/*
+ * Rendering is best effort. A line that does not fit is truncated, and there is
+ * nothing useful to do about it mid-frame -- dropping the rest of the dashboard
+ * would be worse than a short line. These three wrappers are where that decision
+ * lives: the ignore is stated once, here, instead of being scattered over every
+ * call in the renderer.
+ */
+static void line_append(ql_str_t* line, const char* text)
+{
+    ql_ret_t rc = ql_str_append(line, text);
+
+    (void)rc;
+}
+
+static void line_append_char(ql_str_t* line, char c)
+{
+    ql_ret_t rc = ql_str_append_char(line, c);
+
+    (void)rc;
+}
+
+static void line_printf(ql_str_t* line, const char* format, ...)
+{
+    va_list ap;
+    ql_ret_t rc;
+
+    va_start(ap, format);
+    rc = ql_str_append_vprintf(line, format, ap);
+    va_end(ap);
+    (void)rc;
+}
+
 /** @brief Draw a horizontal rule that fits the render width. */
 static void rule(ql_str_t* line, const char* left, const char* fill, const char* right)
 {
     int i;
 
-    (void)ql_str_append(line, left);
+    line_append(line, left);
     for (i = 0; i < RENDER_WIDTH - 2; i++)
     {
-        (void)ql_str_append(line, fill);
+        line_append(line, fill);
     }
-    (void)ql_str_append(line, right);
+    line_append(line, right);
 }
 
 /** @brief Emit one assembled line. */
 static void emit(const ql_str_t* line)
 {
-    fputs(ql_str_cstr(line), stdout);
-    fputc('\n', stdout);
+    (void)fputs(ql_str_cstr(line), stdout);
+    (void)fputc('\n', stdout);
 }
 
 /** @brief Draw the header: uptime, workers, and what the queue is doing. */
 static void render_header(ql_str_t* line, double seconds, int workers)
 {
-    (void)ql_str_append(line, "\033[1;36m qlib ");
-    (void)ql_str_append_printf(line, "workbench " QLIB_VERSION_STRING "\033[0m");
-    (void)ql_str_append_printf(line, "   up %.1fs   threads %d   width %d", seconds, workers, RENDER_WIDTH);
+    line_append(line, "\033[1;36m qlib ");
+    line_printf(line, "workbench " QLIB_VERSION_STRING "\033[0m");
+    line_printf(line, "   up %.1fs   threads %d   width %d", seconds, workers, RENDER_WIDTH);
 }
 
 /** @brief Draw the sparkline of recent throughput. */
@@ -220,7 +263,7 @@ static void render_spark(ql_str_t* line, const workbench* wb)
         }
     }
 
-    (void)ql_str_append(line, " ");
+    line_append(line, " ");
     for (i = start; i < count; i++)
     {
         const size_t* sample = ql_vector_at(wb->samples, i);
@@ -230,7 +273,7 @@ static void render_spark(ql_str_t* line, const workbench* wb)
         {
             level = 9;
         }
-        (void)ql_str_append_char(line, g_spark_chars[level]);
+        line_append_char(line, g_spark_chars[level]);
     }
 }
 
@@ -247,7 +290,7 @@ static void render_counters(ql_str_t* line, const workbench* wb, int workers)
         {
             count = 0;
         }
-        (void)ql_str_append_printf(line, " w%-2d %6zu  ", id, count);
+        line_printf(line, " w%-2d %6zu  ", id, count);
         if ((id % 3) == 2)
         {
             emit(line);
@@ -274,7 +317,7 @@ static void render_messages(ql_str_t* line, const workbench* wb)
         {
             continue;
         }
-        (void)ql_str_append_printf(line, " \033[90m|\033[0m %s", text);
+        line_printf(line, " \033[90m|\033[0m %s", text);
         emit(line);
         ql_str_clear(line);
     }
@@ -294,23 +337,23 @@ static void render(workbench* wb, double seconds, int workers)
 
     /* Home the cursor and erase to the end: a full redraw without the flicker
      * of clearing the whole screen. */
-    (void)ql_str_append(line, "\033[H");
+    line_append(line, "\033[H");
     emit(line);
     ql_str_clear(line);
 
-    (void)ql_str_append(line, "\033[1;36m");
+    line_append(line, "\033[1;36m");
     rule(line, "+", "-", "+");
-    (void)ql_str_append(line, "\033[0m");
+    line_append(line, "\033[0m");
     emit(line);
     ql_str_clear(line);
 
-    (void)ql_str_append(line, "|");
+    line_append(line, "|");
     render_header(line, seconds, workers);
-    (void)ql_str_append(line, " |");
+    line_append(line, " |");
     emit(line);
     ql_str_clear(line);
 
-    (void)ql_str_append(line, "+");
+    line_append(line, "+");
     rule(line, "+", "-", "+");
     emit(line);
     ql_str_clear(line);
@@ -323,12 +366,12 @@ static void render(workbench* wb, double seconds, int workers)
         total = wb->total;
         ql_mutex_unlock(wb->mutex);
 
-        (void)ql_str_append_printf(line, "| total %zu   queue %zu/%d   dropped %zu", total, ql_list_size(wb->messages),
-                                   MAX_MESSAGES, wb->dropped);
+        line_printf(line, "| total %zu   queue %zu/%d   dropped %zu", total, ql_list_size(wb->messages), MAX_MESSAGES,
+                    wb->dropped);
         emit(line);
         ql_str_clear(line);
 
-        (void)ql_str_append(line, "|");
+        line_append(line, "|");
         render_spark(line, wb);
         emit(line);
         ql_str_clear(line);
@@ -340,7 +383,7 @@ static void render(workbench* wb, double seconds, int workers)
 
     /* Counters and records side by side would need a grid; the terminal width
      * is not knowable portably, so they are stacked. */
-    (void)ql_str_append(line, "| per-worker counters");
+    line_append(line, "| per-worker counters");
     emit(line);
     ql_str_clear(line);
     ql_mutex_lock(wb->mutex);
@@ -351,7 +394,7 @@ static void render(workbench* wb, double seconds, int workers)
     emit(line);
     ql_str_clear(line);
 
-    (void)ql_str_append(line, "| recent records");
+    line_append(line, "| recent records");
     emit(line);
     ql_str_clear(line);
     ql_mutex_lock(wb->mutex);
@@ -368,27 +411,112 @@ static void render(workbench* wb, double seconds, int workers)
     memset(net_text, 0, sizeof net_text);
     (void)ql_net_addr_parse("2001:db8::1", &net);
     (void)ql_net_addr_format(&net, net_text, sizeof net_text);
-    (void)ql_str_append_printf(line, "| net: %s parses and formats as %s", "2001:db8::1", net_text);
+    line_printf(line, "| net: %s parses and formats as %s", "2001:db8::1", net_text);
     emit(line);
     ql_str_clear(line);
 
-    (void)ql_str_append(line, "\033[J\033[1;90m");
+    line_append(line, "\033[J\033[1;90m");
     rule(line, "+", "-", "+");
-    (void)ql_str_append(line, "\033[0m");
+    line_append(line, "\033[0m");
     emit(line);
-    fflush(stdout);
+    (void)fflush(stdout);
 
     ql_str_destroy(line);
 }
 
 static void usage(const char* program)
 {
-    printf("usage: %s [--frames N] [--workers N] [--fps N] [--log FILE]\n", program);
-    printf("\n");
-    printf("  --frames N   render N frames and exit; 0 (the default) runs until Ctrl-C\n");
-    printf("  --workers N  worker threads, 1..%d (default 4)\n", MAX_WORKERS);
-    printf("  --fps N      frames per second, 1..60 (default 10)\n");
-    printf("  --log FILE   also write the record stream to FILE asynchronously\n");
+    (void)printf("usage: %s [--frames N] [--workers N] [--fps N] [--log FILE]\n", program);
+    (void)printf("\n");
+    (void)printf("  --frames N   render N frames and exit; 0 (the default) runs until Ctrl-C\n");
+    (void)printf("  --workers N  worker threads, 1..%d (default 4)\n", MAX_WORKERS);
+    (void)printf("  --fps N      frames per second, 1..60 (default 10)\n");
+    (void)printf("  --log FILE   also write the record stream to FILE asynchronously\n");
+}
+
+/** @brief Parse a non-negative integer and reject anything else. */
+static bool parse_uint(const char* text, int* out)
+{
+    char* end = NULL;
+    long value;
+
+    errno = 0;
+    value = strtol(text, &end, 10);
+    if (end == text || *end != '\0' || errno == ERANGE || value < 0 || value > INT_MAX)
+    {
+        return false;
+    }
+    *out = (int)value;
+    return true;
+}
+
+/**
+ * @brief Read the command line.
+ *
+ * Returns 0 to carry on, 1 when the caller should exit successfully (--help), and
+ * -1 on a bad option. atoi() would have been shorter and would have turned
+ * "--frames abc" into 0 without a word.
+ */
+static int parse_options(int argc, char** argv, workbench_options* opts)
+{
+    int i;
+
+    for (i = 1; i < argc; i++)
+    {
+        const char* arg = argv[i];
+
+        if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0)
+        {
+            usage(argv[0]);
+            return 1;
+        }
+        if (strcmp(arg, "--log") == 0)
+        {
+            if (i + 1 >= argc)
+            {
+                (void)fprintf(stderr, "%s: --log needs a file name\n", argv[0]);
+                return -1;
+            }
+            opts->log_path = argv[++i];
+            continue;
+        }
+        if (i + 1 >= argc)
+        {
+            (void)fprintf(stderr, "%s: %s needs a value\n", argv[0], arg);
+            return -1;
+        }
+        if (strcmp(arg, "--frames") == 0)
+        {
+            if (!parse_uint(argv[++i], &opts->frames))
+            {
+                (void)fprintf(stderr, "%s: --frames needs a non-negative number\n", argv[0]);
+                return -1;
+            }
+        }
+        else if (strcmp(arg, "--workers") == 0)
+        {
+            if (!parse_uint(argv[++i], &opts->workers))
+            {
+                (void)fprintf(stderr, "%s: --workers needs a non-negative number\n", argv[0]);
+                return -1;
+            }
+        }
+        else if (strcmp(arg, "--fps") == 0)
+        {
+            if (!parse_uint(argv[++i], &opts->fps))
+            {
+                (void)fprintf(stderr, "%s: --fps needs a non-negative number\n", argv[0]);
+                return -1;
+            }
+        }
+        else
+        {
+            (void)fprintf(stderr, "%s: unknown option %s\n", argv[0], arg);
+            usage(argv[0]);
+            return -1;
+        }
+    }
+    return 0;
 }
 
 int main(int argc, char** argv)
@@ -397,47 +525,37 @@ int main(int argc, char** argv)
     worker_arg args[MAX_WORKERS];
     ql_thread_t* threads[MAX_WORKERS];
     ql_allocator_t* alloc = NULL;
-    int workers = 4;
-    int frames = 0;
-    int fps = 10;
-    const char* log_path = NULL;
+    int workers;
+    int frames;
+    int fps;
+    const char* log_path;
     int rendered = 0;
     int i;
+    workbench_options opts;
+    int parsed;
 
-    for (i = 1; i < argc; i++)
+    memset(&opts, 0, sizeof opts);
+    opts.workers = 4;
+    opts.fps = 10;
+
+    parsed = parse_options(argc, argv, &opts);
+    if (parsed == 1)
     {
-        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0)
-        {
-            usage(argv[0]);
-            return 0;
-        }
-        else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc)
-        {
-            frames = atoi(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--workers") == 0 && i + 1 < argc)
-        {
-            workers = atoi(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--fps") == 0 && i + 1 < argc)
-        {
-            fps = atoi(argv[++i]);
-        }
-        else if (strcmp(argv[i], "--log") == 0 && i + 1 < argc)
-        {
-            log_path = argv[++i];
-        }
-        else
-        {
-            fprintf(stderr, "%s: unknown option %s\n", argv[0], argv[i]);
-            usage(argv[0]);
-            return 2;
-        }
+        return 0;
     }
+    if (parsed != 0)
+    {
+        return 2;
+    }
+
+    workers = opts.workers;
+    frames = opts.frames;
+    fps = opts.fps;
+    log_path = opts.log_path;
 
     if (workers < 1 || workers > MAX_WORKERS || fps < 1 || fps > 60 || frames < 0)
     {
-        fprintf(stderr, "%s: workers must be 1..%d, fps 1..60, frames >= 0\n", argv[0], MAX_WORKERS);
+        (void)fprintf(stderr, "%s: workers must be 1..%d, fps 1..60, frames >= 0\n", argv[0], MAX_WORKERS);
         return 2;
     }
 
@@ -446,7 +564,7 @@ int main(int argc, char** argv)
 
     if (ql_log_init(alloc) != QL_OK)
     {
-        fprintf(stderr, "%s: could not start the logger\n", argv[0]);
+        (void)fprintf(stderr, "%s: could not start the logger\n", argv[0]);
         return 1;
     }
     QL_LOG_INFO("workbench starting: %d workers at %d fps", workers, fps);
@@ -456,7 +574,7 @@ int main(int argc, char** argv)
     {
         if (ql_log_set_file(log_path) != QL_OK)
         {
-            fprintf(stderr, "%s: could not open %s\n", argv[0], log_path);
+            (void)fprintf(stderr, "%s: could not open %s\n", argv[0], log_path);
             return 1;
         }
         (void)ql_log_async_enable(128);
@@ -467,7 +585,7 @@ int main(int argc, char** argv)
         ql_hash_create(alloc, sizeof(int), sizeof(size_t), &wb.per_worker) != QL_OK ||
         ql_vector_create(alloc, sizeof(size_t), &wb.samples) != QL_OK)
     {
-        fprintf(stderr, "%s: could not create the workbench state\n", argv[0]);
+        (void)fprintf(stderr, "%s: could not create the workbench state\n", argv[0]);
         return 1;
     }
     wb.running = true;
@@ -478,7 +596,7 @@ int main(int argc, char** argv)
         args[i].id = i;
         if (ql_thread_create(alloc, worker, &args[i], &threads[i]) != QL_OK)
         {
-            fprintf(stderr, "%s: could not start worker %d\n", argv[0], i);
+            (void)fprintf(stderr, "%s: could not start worker %d\n", argv[0], i);
             return 1;
         }
     }
@@ -487,10 +605,11 @@ int main(int argc, char** argv)
 
     /* Hide the cursor and clear once; every frame after that homes and erases
      * to the end, which redraws without the flicker of a full clear. */
-    fputs("\033[?25l\033[2J", stdout);
+    (void)fputs("\033[?25l\033[2J", stdout);
 
     {
-        int frame_ms = 1000 / fps;
+        int frame_ms = 1000 / (fps > 0 ? fps : 1);
+        double elapsed = 0.0;
 
         while (!g_stop && (frames == 0 || rendered < frames))
         {
@@ -505,8 +624,9 @@ int main(int argc, char** argv)
                 ql_vector_clear(wb.samples);
             }
 
-            render(&wb, (double)rendered / (double)fps, workers);
+            render(&wb, elapsed, workers);
             rendered++;
+            elapsed += (double)frame_ms / 1000.0;
             sleep_ms(&wb, frame_ms);
         }
     }
@@ -520,7 +640,7 @@ int main(int argc, char** argv)
         ql_thread_join(threads[i]);
     }
 
-    fputs("\033[?25h\033[0m\n", stdout);
+    (void)fputs("\033[?25h\033[0m\n", stdout);
     QL_LOG_INFO("workbench stopping after %d frames", rendered);
 
     if (log_path != NULL)
@@ -536,6 +656,6 @@ int main(int argc, char** argv)
     ql_cond_destroy(wb.pacer);
     ql_mutex_destroy(wb.mutex);
 
-    printf("rendered %d frame(s)\n", rendered);
+    (void)printf("rendered %d frame(s)\n", rendered);
     return 0;
 }

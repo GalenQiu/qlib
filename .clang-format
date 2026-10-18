@@ -1,27 +1,91 @@
 ---
+# qlib 的代码格式化规则，与 CI 使用的 clang-format 23 保持一致。
+# Formatting rules for qlib, kept in step with clang-format 23, the version CI runs.
+#
+# 以 LLVM 为基线，只覆盖真正不同的部分。每一条覆盖都写了理由——没有理由的覆盖，
+# 到了下一次升级就没人敢动。
+# LLVM is the base style and only what actually differs is overridden. Every
+# override carries a reason: an unexplained one is one nobody dares touch at the
+# next upgrade.
 BasedOnStyle: LLVM
+
+# 四空格缩进，永不用制表符。制表符的宽度取决于阅读者的编辑器，而一个 C 库长什么
+# 样子不该取决于谁的终端设置。
+# Four spaces, no tabs: a tab's width depends on the reader's editor, and what a C
+# library looks like should not depend on someone's terminal settings.
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
+
+# 120 列。这个库的标识符本来就长（ql_log_field_double 已经有 19 个字符），80 列
+# 会把大部分参数列表压成一列一个。
+# 120 columns. The identifiers here are long (ql_log_field_double alone is 19
+# characters), and 80 would push most parameter lists to one per line.
 ColumnLimit: 120
-# The code base is written in Allman style (opening brace on its own line).
+
+# Allman 风格：左花括号独占一行。
+# Allman: the opening brace gets its own line.
 BreakBeforeBraces: Allman
+
+# 对齐连续的赋值或声明，会把互不相关的行绑在一起：改一行，diff 一大片。
+# Aligning consecutive assignments or declarations binds unrelated lines together:
+# change one line and the diff covers a block.
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
+
+# const char* 而不是 const char *，指针符靠左。
+# const char* rather than const char *, so the pointer binds left.
 PointerAlignment: Left
 SpaceAfterCStyleCast: false
-SortIncludes: true
+
+# 空函数体可以留在一行；单行的 if / for 一律展开。
+# An empty body may stay on one line; single-line if/for is always expanded.
 AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-# Keep nested #include/#define readable instead of flushing them to column 0.
+
+# 单语句分支强制加花括号。这是全套规则里唯一"改的是代码、不只是排版"的一条，也是
+# 唯一能在格式层面拦住 goto fail 那一类缺陷的一条——那类 bug 全部来自没有花括号、
+# 后来又长出了第二条语句的分支。
+# Braces are inserted around single-statement branches. This is the one rule that
+# changes code rather than layout, and the only one that can stop the goto-fail
+# class of defect at the formatting layer: every instance of it came from a
+# brace-less branch that later grew a second statement.
+InsertBraces: true
+
+# include 排序区分大小写，与文件系统的实际顺序一致。
+# Include ordering is case sensitive, matching how the filesystem actually sorts.
+SortIncludes: CaseSensitive
+
+# 保留 include 之间的空行分组。默认的 Regroup 会把"本项目 / 标准库"这类分组搅在
+# 一起，而那些分组是有意义的。
+# Preserve the blank-line groups between includes. The default Regroup would merge
+# groups such as "this project / standard library", and those groups carry meaning.
+IncludeBlocks: Preserve
+
+# 嵌套的 #include / #define 缩进两格，而不是一律顶格，可读性更好。
+# Nested #include/#define are indented two spaces instead of being flushed to
+# column zero, which reads better.
 IndentPPDirectives: AfterHash
 PPIndentWidth: 2
-# Do not pad macro line continuations out to ColumnLimit.
+
+# 宏的行尾反斜杠左对齐，不补齐到列宽：否则列宽一改，每个宏都会重写一遍。
+# Macro continuations align left instead of being padded to the column limit,
+# which would otherwise rewrite every macro whenever the limit changes.
 AlignEscapedNewlines: Left
-# NOTE: individual brace overrides live in BraceWrapping, which clang-format
-# only honours under `BreakBeforeBraces: Custom`. Rather than restate the whole
-# Allman matrix, we accept Allman applying to `extern "C"` as well. Without
-# NoIndent, putting that brace on its own line indents the entire header body.
+
+# 文件以换行结尾。POSIX 对文本文件的定义如此，diff 工具也这样期待。
+# Files end with a newline: that is what makes a POSIX text file, and what diff
+# tools expect.
+InsertNewlineAtEOF: true
+
+# 注：各个花括号的单独覆盖属于 BraceWrapping，而 clang-format 只在
+# `BreakBeforeBraces: Custom` 下才理会它。与其把整个 Allman 矩阵重写一遍，这里
+# 接受 Allman 同样作用于 `extern "C"`。若没有 NoIndent，把这个花括号放到独立一行
+# 会把整个头文件主体缩进一级。
+# NOTE: individual brace overrides live in BraceWrapping, which clang-format only
+# honours under `BreakBeforeBraces: Custom`. Rather than restate the whole Allman
+# matrix, we accept Allman applying to `extern "C"` as well. Without NoIndent,
+# putting that brace on its own line indents the entire header body.
 IndentExternBlock: NoIndent
 ...

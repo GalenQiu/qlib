@@ -1,32 +1,78 @@
 ---
-# Static analysis gate. Verified against clang-tidy 23 (see CI).
+# qlib 的静态分析门禁，针对 clang-tidy 23 验证（见 CI）。
+# Static analysis gate for qlib, verified against clang-tidy 23 (see CI).
 #
-# tests/ inherits this file but disables two checks that are inappropriate for
-# test code -- see tests/.clang-tidy.
+# 继承关系：tests/ 与 fuzz/ 都继承本文件，各自关闭一两个对它们不适用的检查——
+# 见 tests/.clang-tidy 与 fuzz/.clang-tidy。理由写在那两个文件里，而不是这里，
+# 因为它们只在那些目录里成立。
+# tests/ and fuzz/ inherit this file and each disable one or two checks that do
+# not apply to them -- see tests/.clang-tidy and fuzz/.clang-tidy. The reasons live
+# there rather than here, because they are only true in those directories.
 #
+# 启用的模块：bugprone、cert、clang-analyzer、misc、performance、portability、
+# readability。这里不启用 modernize / cppcoreguidelines / abseil：它们写的是 C++
+# 规则，而这个库的构建参数是 -std=c11 加 C_EXTENSIONS OFF，一条 C++ 建议在这里
+# 要么无意义，要么会把代码推向本库刻意回避的方向。
+# Enabled modules: bugprone, cert, clang-analyzer, misc, performance, portability,
+# readability. modernize, cppcoreguidelines and abseil are not enabled: they encode
+# C++ rules, and this library builds as -std=c11 with C_EXTENSIONS off. A C++-only
+# suggestion here is either meaningless or pushes the code in a direction the
+# library deliberately avoids.
+#
+# 刻意关闭的检查，每一条都有具体理由：
 # Checks deliberately disabled, each for a concrete reason:
+#
+#   -bugprone-easily-swappable-parameters：在统一的 (ptr, size, userdata) 分配器
+#     回调签名下无法避免。
 #   -bugprone-easily-swappable-parameters: unavoidable with the uniform
 #     (ptr, size, userdata) allocator callback signature.
+#
+#   -readability-magic-numbers：位运算和数学代码里噪声太大。
 #   -readability-magic-numbers: noisy for bit manipulation and math code.
+#
+#   -readability-identifier-length：要求局部变量至少 3 个字符，这与地道的 C
+#     （n、i、p、ok）为敌。
 #   -readability-identifier-length: demands >= 3 character locals, which is
 #     hostile to idiomatic C (n, i, p, ok).
-#   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling:
-#     insists on the Annex K *_s functions (memcpy_s, memset_s, ...). Annex K is
-#     optional and glibc and macOS libc do not provide it, so following this
-#     advice would break two of the three platforms we support. memcpy/memset/
-#     memmove are the correct tools here.
 #
+#   -readability-implicit-bool-conversion：在 C 里比较表达式产生 int，因此从一个
+#     bool 函数写 `return a < b;` 就是一次隐式的 int -> bool 转换。这是正常的 C；
+#     该检查是按 C++ 语义写的，它的 AllowIntegerConditions 只覆盖条件，不覆盖返回
+#     值。
 #   -readability-implicit-bool-conversion: in C a comparison yields int, so
 #     `return a < b;` from a bool function is an implicit int -> bool
 #     conversion. That is ordinary C; the check is written for C++ semantics
 #     and its AllowIntegerConditions option only covers conditions, not returns.
 #
-# NOTE: comments must stay outside the `Checks` block scalar -- YAML treats
-# '#' as content inside a folded block, which would silently corrupt the list.
+#   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling：它要求
+#     改用 Annex K 的 *_s 函数（memcpy_s、memset_s……）。Annex K 是可选的，glibc
+#     和 macOS libc 都不提供，照着做会让本库支持的三个平台里有两个坏掉。
+#     memcpy/memset/memmove 才是这里正确的工具。
+#   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling: insists
+#     on the Annex K *_s functions (memcpy_s, memset_s, ...). Annex K is optional
+#     and glibc and macOS libc do not provide it, so following this advice would
+#     break two of the three platforms we support. memcpy/memset/memmove are the
+#     correct tools here.
+#
+#   -misc-include-cleaner：它要求每个符号都来自直接包含的头文件，也就是 IWYU。
+#     对 C 项目它过于激进：qlib.h 是有意重导出的汇总头，而 size_t、uint32_t、
+#     CLOCK_MONOTONIC 由 <stddef.h>/<stdint.h>/<time.h> 传递提供也是 C 的常规做法。
+#     在本库上它会报 339 条，没有一条是缺陷。
+#   -misc-include-cleaner: demands every symbol come from a directly included
+#     header, which is IWYU. Too aggressive for a C project: qlib.h is a
+#     deliberate re-exporting umbrella header, and it is ordinary C to get size_t,
+#     uint32_t or CLOCK_MONOTONIC transitively. It reports 339 findings here and
+#     none of them is a defect.
+#
+# 注意：注释必须留在 `Checks` 这个折叠块标量之外——YAML 在折叠块里把 '#' 当作内容，
+# 写成注释会静默地污染列表。
+# NOTE: comments must stay outside the `Checks` block scalar -- YAML treats '#' as
+# content inside a folded block, which would silently corrupt the list.
 Checks: >
   bugprone-*,
   cert-*,
   clang-analyzer-*,
+  misc-*,
   performance-*,
   portability-*,
   readability-*,
@@ -34,12 +80,27 @@ Checks: >
   -readability-magic-numbers,
   -readability-identifier-length,
   -readability-implicit-bool-conversion,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -misc-include-cleaner
 
-# Report diagnostics coming from our own headers, not from system headers or
-# from third party code pulled in through them.
+# 只报告我们自己代码里的问题：不报系统头，也不报经由它们引入的第三方代码。
+# 范围限定在 qlib 的公开头文件和测试头文件上。
+# Report diagnostics from our own code only: not from system headers, nor from
+# third party code pulled in through them. The scope is qlib's public headers and
+# the test headers.
 HeaderFilterRegex: '(include/qlib/|tests/).*\.h$'
+SystemHeaders: false
 
-# Any finding fails the CI job.
+# `--fix` 产生的代码按 .clang-format 排版，而不是 clang-tidy 的内置默认。没有这一
+# 行，自动修复会产出与本项目风格不一致的代码，然后再被格式检查打回。
+# Code produced by `--fix` is formatted with .clang-format rather than clang-tidy's
+# built-in default. Without this, an autofix yields code in the wrong style that the
+# format check then rejects.
+FormatStyle: file
+
+# 任何一条发现都会让 CI 失败。这条规则之所以成立，是因为"关闭的检查"上面都给了
+# 理由：一个可以随手关掉的检查等于没有检查。
+# Any finding fails the CI job. That is only workable because every disabled check
+# above has a reason: a check that can be switched off casually is no check at all.
 WarningsAsErrors: '*'
 ...

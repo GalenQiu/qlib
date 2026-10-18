@@ -1,11 +1,29 @@
 ---
-# Inherits the repository-wide rules, with one exception.
+# 继承仓库级规则，关闭两条。
+# Inherits the repository-wide rules, with two exceptions.
 #
+# readability-function-cognitive-complexity 是衡量生产逻辑的指标。libFuzzer 的入口
+# 函数按设计就是一个长函数：构造用例、施加用例、逐条检查不变量；拆成辅助函数只是
+# 把分支挪个地方。src/ 保留该检查、这里关闭，与 tests/.clang-tidy 做的是同一个取舍。
 # readability-function-cognitive-complexity is a metric for production logic. A
 # libFuzzer entry point is a single long function by design: it builds a case,
 # applies it, and checks a list of invariants, and splitting it into helpers
 # would only move the branches. Keeping the check on for src/ and off here is
 # the same trade-off tests/.clang-tidy makes.
+#
+# misc-use-internal-linkage 会建议把 LLVMFuzzerTestOneInput 改成 static，理由是它在
+# 本编译单元里没有被调用。这里它是错的：libFuzzer 的运行时正是通过这个**外部符号**
+# 找到入口。改成 static 之后目标程序照样链得起来，但一次输入都不会跑——引擎要么报
+# 找不到入口，要么静默空转。这种"编译通过、运行静默失效"的建议必须在这一处挡掉，
+# 而不是在六个目标文件里各写一遍 NOLINT。
+# misc-use-internal-linkage suggests making LLVMFuzzerTestOneInput static, because
+# nothing in this translation unit calls it. That is wrong here: libFuzzer's
+# runtime finds the entry point through this **external symbol**. Made static, the
+# target still links but never runs a single input -- the engine either reports a
+# missing entry point or silently does nothing. A suggestion that compiles fine and
+# fails silently belongs in one file rather than as a NOLINT in all six targets.
 InheritParentConfig: true
 Checks: >
-  -readability-function-cognitive-complexity
+  -readability-function-cognitive-complexity,
+  -misc-use-internal-linkage
+...

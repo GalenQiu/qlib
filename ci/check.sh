@@ -144,10 +144,13 @@ step_tidy() {
     # clang-tidy falls back to a default command for files that have no entry in
     # compile_commands.json.
     cmake -S . -B "$SCRATCH/build" -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON \
-        -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON \
+        -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON -DQLIB_BUILD_EXAMPLES=ON \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null || return 1
     cmake --build "$SCRATCH/build" >/dev/null || return 1
-    clang-tidy src/*.c tests/*.c bench/*.c fuzz/*.c -p "$SCRATCH/build"
+    # Every directory that holds code the library ships. examples/ was missing
+    # here for a while, which is why the demo collected eighteen findings the
+    # moment it was added to the list.
+    clang-tidy src/*.c tests/*.c bench/*.c fuzz/*.c examples/*.c -p "$SCRATCH/build"
 }
 
 step_threads() {
