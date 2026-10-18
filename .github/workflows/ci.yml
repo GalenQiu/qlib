@@ -343,23 +343,45 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-23 main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
           sudo apt-get update
-          sudo apt-get install -y clang-tidy-23
+          # clang-23 as well: it compiles the fuzz targets, whose translation
+          # units have to exist in the database. Same version as clang-tidy so the
+          # analyser and the compiler agree on their builtin headers.
+          sudo apt-get install -y clang-tidy-23 clang-23
 
       - name: Configure for the compilation database
-        # Everything that holds shipped code, so every file has a real entry in
-        # compile_commands.json rather than a fallback command. This used to
-        # configure without the bench and examples, and then analyse only src/
-        # and tests/.
+        # Every option on. The purpose of this build is a database that covers
+        # everything, not a representative configuration -- and the fuzz targets
+        # need clang to exist in it at all.
+        env:
+          CC: clang-23
         run: >
           cmake -S . -B build
           -DQLIB_BUILD_BENCH=ON
           -DQLIB_BUILD_THREADS=ON
           -DQLIB_BUILD_LOG=ON
           -DQLIB_BUILD_EXAMPLES=ON
+          -DQLIB_BUILD_FUZZ=ON
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Analyse
-        # All five directories that hold code. fuzz/ has no build entry here
-        # (the sanitizer needs clang), and clang-tidy falls back to a default
-        # command for those, which is still worth analysing.
-        run: clang-tidy-23 src/*.c tests/*.c bench/*.c fuzz/*.c examples/*.c -p build
+        # The file list comes from the build, not from a list of directories
+        # written here: the previous version analysed two of five and reported
+        # success, so src/ and tests/ were the only checked code.
+        shell: bash
+        run: |
+          set -o pipefail
+          files=$(python3 -c '
+          import json
+          seen = []
+          for entry in json.load(open("build/compile_commands.json")):
+              path = entry["file"]
+              if path.endswith(".c") and path not in seen:
+                  seen.append(path)
+          print(" ".join(sorted(seen)))
+          ')
+          if [ -z "$files" ]; then
+            echo "::error::the compilation database listed no C files"
+            exit 1
+          fi
+          echo "analysing $(echo "$files" | wc -w) translation unit(s)"
+          clang-tidy-23 $files -p build

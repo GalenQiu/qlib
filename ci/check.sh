@@ -137,20 +137,47 @@ step_net_off() {
     ctest --test-dir "$SCRATCH/nonet" --output-on-failure
 }
 
+# Every C translation unit in a compile_commands.json, one per line.
+#
+# This is where the tidy step gets its file list, so the list cannot drift from
+# what the build actually compiles. Listing directories by hand is what let
+# examples/ go unanalysed while the step reported success.
+compile_db_files() {
+    python3 -c '
+import json, sys
+seen = []
+for entry in json.load(open(sys.argv[1])):
+    path = entry["file"]
+    if path.endswith(".c") and path not in seen:
+        seen.append(path)
+print("\n".join(sorted(seen)))
+' "$1"
+}
+
 step_tidy() {
     have clang-tidy || { echo "clang-tidy not found"; return 2; }
+    # clang is needed to compile the fuzz targets, and they have to compile for
+    # their translation units to appear in the compilation database.
+    have clang || { echo "clang not found"; return 2; }
 
-    # Threads on: the suite prototypes are behind QLIB_HAS_THREADS, and
-    # clang-tidy falls back to a default command for files that have no entry in
-    # compile_commands.json.
-    cmake -S . -B "$SCRATCH/build" -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON \
+    # Every option on: the point of this build is to produce a compilation
+    # database that covers everything, not to be a representative configuration.
+    CC=clang cmake -S . -B "$SCRATCH/build" -DQLIB_WERROR=ON -DQLIB_BUILD_BENCH=ON \
         -DQLIB_BUILD_THREADS=ON -DQLIB_BUILD_LOG=ON -DQLIB_BUILD_EXAMPLES=ON \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null || return 1
+        -DQLIB_BUILD_FUZZ=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null || return 1
     cmake --build "$SCRATCH/build" >/dev/null || return 1
-    # Every directory that holds code the library ships. examples/ was missing
-    # here for a while, which is why the demo collected eighteen findings the
-    # moment it was added to the list.
-    clang-tidy src/*.c tests/*.c bench/*.c fuzz/*.c examples/*.c -p "$SCRATCH/build"
+
+    local files count
+    files=$(compile_db_files "$SCRATCH/build/compile_commands.json") || return 1
+    if [ -z "$files" ]; then
+        echo "the compilation database listed no C files"
+        return 1
+    fi
+    count=$(printf '%s\n' "$files" | wc -l | tr -d ' ')
+    # Saying how many files were analysed is what would have made "four of five"
+    # visible instead of silent.
+    echo "analysing $count translation unit(s) from the compilation database"
+    clang-tidy $files -p "$SCRATCH/build"
 }
 
 step_threads() {
